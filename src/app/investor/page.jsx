@@ -19,15 +19,25 @@ const allocation = [
     { label: 'Stables', value: 16, color: '#26a17b' },
     { label: 'Alts', value: 8, color: '#ff8a00' },
 ];
-const CURRENT_YEAR = new Date().getFullYear();
-const PREVIOUS_YEAR = CURRENT_YEAR - 1;
-const reports = [
-    { name: `Q3 ${CURRENT_YEAR} Performance Report`, date: `Oct 14, ${CURRENT_YEAR}`, size: '2.4 MB' },
-    { name: `September ${CURRENT_YEAR} NAV Statement`, date: `Oct 02, ${CURRENT_YEAR}`, size: '812 KB' },
-    { name: `Audited Financials FY ${PREVIOUS_YEAR}`, date: `Mar 22, ${CURRENT_YEAR}`, size: '4.1 MB' },
-    { name: `Risk & Compliance Disclosure ${PREVIOUS_YEAR}`, date: `Jan 14, ${CURRENT_YEAR}`, size: '1.7 MB' },
-];
+function buildLiveReports() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const previousYear = currentYear - 1;
+    // Monthly NAV statements publish on the second calendar day after month end.
+    const navPublicationDay = 2;
+    const previousMonth = new Date(currentYear, now.getMonth() - 1, 1);
+    const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
+    const fmt = (date) => date.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+    const monthName = previousMonth.toLocaleDateString(undefined, { month: 'long' });
+    return [
+        { name: `Q${currentQuarter} ${currentYear} Performance Report`, date: fmt(now), status: 'Current quarter' },
+        { name: `${monthName} ${currentYear} NAV Statement`, date: fmt(new Date(currentYear, now.getMonth(), navPublicationDay)), status: 'Monthly NAV cycle' },
+        { name: `Audited Financials FY ${previousYear}`, date: fmt(new Date(currentYear, 2, 22)), status: 'Current archive' },
+        { name: `Risk & Compliance Disclosure ${currentYear}`, date: fmt(now), status: 'Daily risk cycle' },
+    ];
+}
 export default function InvestorPortalPage() {
+    const reports = buildLiveReports();
     return (<main className="pb-20 lg:pb-0">
       <Navbar />
       <section className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-12 pb-6">
@@ -183,7 +193,7 @@ export default function InvestorPortalPage() {
                 <FileText className="h-4 w-4 text-gold-400"/>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{r.name}</p>
-                  <p className="text-[11px] text-white/55">{r.date} · {r.size}</p>
+                  <p className="text-[11px] text-white/55">{r.date} · {r.status}</p>
                 </div>
               </div>))}
           </div>
