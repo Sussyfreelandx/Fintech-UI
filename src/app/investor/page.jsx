@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Briefcase, ShieldCheck, FileText, TrendingUp, PieChart as PieIcon, Brain, Users, Building2, Gauge, } from 'lucide-react';
 import { Navbar } from '@/components/layout/Navbar';
@@ -19,7 +20,7 @@ const allocation = [
     { label: 'Stables', value: 16, color: '#26a17b' },
     { label: 'Alts', value: 8, color: '#ff8a00' },
 ];
-function buildLiveReports() {
+function buildLiveReports(liveSummary) {
     const now = new Date();
     const currentYear = now.getFullYear();
     const previousYear = currentYear - 1;
@@ -29,15 +30,36 @@ function buildLiveReports() {
     const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
     const fmt = (date) => date.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
     const monthName = previousMonth.toLocaleDateString(undefined, { month: 'long' });
+    const volume = liveSummary?.volume ? formatUSD(liveSummary.volume, 0) : 'Connecting';
+    const leader = liveSummary?.leader || 'market feed';
     return [
-        { name: `Q${currentQuarter} ${currentYear} Performance Report`, date: fmt(now), status: 'Current quarter' },
-        { name: `${monthName} ${currentYear} NAV Statement`, date: fmt(new Date(currentYear, now.getMonth(), navPublicationDay)), status: 'Monthly NAV cycle' },
+        { name: `Q${currentQuarter} ${currentYear} Live Market Performance`, date: fmt(now), status: `${volume} 24h tracked volume` },
+        { name: `${monthName} ${currentYear} NAV Market Snapshot`, date: fmt(new Date(currentYear, now.getMonth(), navPublicationDay)), status: `Leader: ${leader}` },
         { name: `Audited Financials FY ${previousYear}`, date: fmt(new Date(currentYear, 2, 22)), status: 'Current archive' },
-        { name: `Risk & Compliance Disclosure ${currentYear}`, date: fmt(now), status: 'Daily risk cycle' },
+        { name: `Risk & Compliance Disclosure ${currentYear}`, date: fmt(now), status: liveSummary?.updatedAt ? `Live refresh ${new Date(liveSummary.updatedAt).toLocaleTimeString()}` : 'Connecting to live risk cycle' },
     ];
 }
 export default function InvestorPortalPage() {
-    const reports = buildLiveReports();
+    const [liveSummary, setLiveSummary] = useState(null);
+    useEffect(() => {
+        let mounted = true;
+        const load = async () => {
+            try {
+                const res = await fetch('/api/markets', { cache: 'no-store' });
+                if (!res.ok) throw new Error('markets unavailable');
+                const data = await res.json();
+                const markets = Array.isArray(data.markets) ? data.markets : [];
+                const liveRows = markets.filter((m) => m && Number.isFinite(Number(m.price)) && Number(m.price) > 0);
+                const leader = liveRows.slice().sort((a, b) => Number(b.pct || 0) - Number(a.pct || 0))[0];
+                const volume = liveRows.reduce((sum, m) => sum + Number(m.volume || 0), 0);
+                if (mounted) setLiveSummary({ volume, leader: leader ? `${leader.symbol} ${Number(leader.pct || 0).toFixed(2)}%` : null, updatedAt: Date.now() });
+            } catch (_) {}
+        };
+        load();
+        const id = setInterval(load, 30000);
+        return () => { mounted = false; clearInterval(id); };
+    }, []);
+    const reports = buildLiveReports(liveSummary);
     return (<main className="pb-20 lg:pb-0">
       <Navbar />
       <section className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-12 pb-6">
@@ -48,8 +70,8 @@ export default function InvestorPortalPage() {
           <h1 className="mt-4 text-3xl sm:text-4xl font-display">
             <span className="text-gradient-gold">AurumX</span> Asset Management
           </h1>
-          <p className="mt-2 text-white/65 max-w-2xl">
-            Private banking for digital assets. Custom mandates, managed strategies, and institutional reporting for family offices, treasuries, and qualified investors.
+          <p className="mt-2 text-white/65 max-w-3xl">
+            AurumX Asset Management combines live crypto market access, portfolio governance, custody coordination, and risk oversight for investors who need a transparent digital asset operating platform rather than a basic trading app.
           </p>
         </motion.div>
 
@@ -154,7 +176,7 @@ export default function InvestorPortalPage() {
           <PieIcon className="h-6 w-6 text-gold-400"/>
           <p className="font-semibold mt-3">Risk management</p>
           <p className="text-sm text-white/65 mt-1">
-            Stress tests, VaR (95%), drawdown analytics, scenario simulation, and concentration limits — reviewed daily by the risk committee.
+            Stress tests, VaR (95%), drawdown analytics, scenario simulation, and concentration limits - reviewed daily by the risk committee.
           </p>
           <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
             <div className="glass-light p-2 text-center"><p className="text-white/50">VaR (1d)</p><p className="font-semibold">-2.1%</p></div>
@@ -166,7 +188,7 @@ export default function InvestorPortalPage() {
           <ShieldCheck className="h-6 w-6 text-neon-orange"/>
           <p className="font-semibold mt-3">Secure onboarding · KYC/AML</p>
           <p className="text-sm text-white/65 mt-1">
-            White-glove onboarding for institutions. Document collection, UBO verification, source-of-funds, and Chainalysis screening — done in 48 hours.
+            White-glove onboarding for institutions. Document collection, UBO verification, source-of-funds, and Chainalysis screening - done in 48 hours.
           </p>
           <div className="mt-3 space-y-2">
             {[
@@ -181,15 +203,20 @@ export default function InvestorPortalPage() {
         </div>
       </section>
 
-      {/* Client reporting */}
+      {/* Transparency and governance */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-6 mb-12">
         <div className="glass-strong p-5">
           <div className="flex items-center justify-between">
-            <p className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4"/> Client reporting center</p>
-            <button className="text-xs text-neon-green hover:underline">Subscribe to monthly NAV</button>
+            <div>
+              <p className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4"/> Transparency, governance and live reporting</p>
+              <p className="mt-1 text-sm text-white/60 max-w-2xl">
+                Investors receive live market-backed portfolio records, custody-ready transaction history, risk updates, and compliance evidence designed for board packs, treasury reviews, and family-office reporting.
+              </p>
+            </div>
+            <button className="text-xs text-neon-green hover:underline">Subscribe to reporting updates</button>
           </div>
-          <div className="mt-3 divide-y divide-white/5">
-            {reports.map((r) => (<div key={r.name} className="py-2.5 flex items-center gap-3">
+          <div className="mt-5 grid lg:grid-cols-4 gap-3">
+            {reports.map((r) => (<div key={r.name} className="glass-light p-3 flex items-center gap-3">
                 <FileText className="h-4 w-4 text-gold-400"/>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{r.name}</p>
