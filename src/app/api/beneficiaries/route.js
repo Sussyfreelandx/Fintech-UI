@@ -1,11 +1,11 @@
-// Beneficiary address book — list, add, remove.
+// Beneficiary address book - list, add, remove.
 //
 // Adding a beneficiary triggers an email confirmation. The user must
 // click the link in the email AND then wait out a 48-hour cool-down
 // before the address can receive funds. This is the standard pattern
 // every major broker uses to defeat ATO-and-drain attacks.
 //
-// Sanctioned addresses (OFAC SDN list — see src/lib/server/sanctions.js)
+// Sanctioned addresses (OFAC SDN list - see src/lib/server/sanctions.js)
 // are rejected at create time and at withdraw time.
 import { NextResponse } from 'next/server';
 import crypto from 'node:crypto';
@@ -112,7 +112,7 @@ export async function POST(req) {
       });
       return NextResponse.json({ error: sanctioned }, { status: 400 });
     }
-    // Prevent duplicates per (user, symbol, address, memo) — silently
+    // Prevent duplicates per (user, symbol, address, memo) - silently
     // returning the existing row would mask phishing edits, so be loud.
     const dup = beneficiariesForUser(user.id).find(
       (b) =>
@@ -141,12 +141,12 @@ export async function POST(req) {
     const confirmUrl = `${appUrl}/api/beneficiaries/confirm?id=${encodeURIComponent(b.id)}&token=${encodeURIComponent(token)}`;
     const html = `<p>Confirm new withdrawal beneficiary "<b>${escapeHtml(label)}</b>" for ${symbol}:</p>` +
       `<p style="font-family:Menlo,monospace;background:#11172a;color:#fff;padding:8px;border-radius:6px">${escapeHtml(address)}${memo ? ` · memo ${escapeHtml(memo)}` : ''}${network ? ` · ${escapeHtml(network)}` : ''}</p>` +
-      `<p><a href="${confirmUrl}" style="background:#facc15;color:#111;padding:10px 16px;border-radius:8px;text-decoration:none">Confirm beneficiary</a></p>` +
+      `<p><a href="${confirmUrl}" style="background:#06d6c4;color:#03121f;padding:10px 16px;border-radius:8px;text-decoration:none">Confirm beneficiary</a></p>` +
       `<p>Even after confirmation, this address cannot receive funds for <b>48 hours</b>. If you did not add this beneficiary, ignore this email and rotate your password immediately.</p>`;
     try {
       await sendEmail({
         to: user.email,
-        subject: `Confirm new withdrawal beneficiary — ${symbol}`,
+        subject: `Confirm new withdrawal beneficiary - ${symbol}`,
         html,
         text: `Confirm beneficiary "${label}" for ${symbol} at ${address}. Open ${confirmUrl}. A 48-hour cool-down applies after confirmation.`,
       });

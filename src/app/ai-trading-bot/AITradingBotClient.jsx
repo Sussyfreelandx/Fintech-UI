@@ -2,61 +2,22 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Bot, Zap, Activity, TrendingUp, TrendingDown, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
+import { Bot, Zap, Activity, TrendingUp, TrendingDown, ArrowRight, Sparkles, ShieldCheck, Loader2 } from 'lucide-react';
 import { useLivePrices, useLiveKlines } from '@/lib/useLiveData';
 import { useSession } from '@/lib/useSession';
 import { formatUSD, formatPct } from '@/lib/utils';
+import { buildMarketSignal, candleCloseSeries } from '@/lib/marketSignals';
 
 const UNIVERSE = [
   'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT',
   'ADAUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOGEUSDT', 'DOTUSDT',
 ];
 
-function rsi(closes, period = 14) {
-  if (!closes || closes.length < period + 1) return null;
-  let gains = 0, losses = 0;
-  for (let i = 1; i <= period; i++) {
-    const d = closes[i] - closes[i - 1];
-    if (d >= 0) gains += d; else losses -= d;
-  }
-  let avgG = gains / period, avgL = losses / period;
-  for (let i = period + 1; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1];
-    avgG = (avgG * (period - 1) + Math.max(d, 0)) / period;
-    avgL = (avgL * (period - 1) + Math.max(-d, 0)) / period;
-  }
-  if (avgL === 0) return 100;
-  const rs = avgG / avgL;
-  return 100 - 100 / (1 + rs);
-}
-
-function sma(closes, n) {
-  if (!closes || closes.length < n) return null;
-  let s = 0;
-  for (let i = closes.length - n; i < closes.length; i++) s += closes[i];
-  return s / n;
-}
-
-function classifySignal({ rsiVal, fast, slow, pct24 }) {
-  const trendUp = fast != null && slow != null && fast > slow;
-  if (rsiVal == null) return { label: 'Warming up', tone: 'neutral', score: 0 };
-  if (rsiVal < 30 && trendUp) return { label: 'Strong buy', tone: 'buy', score: 4 };
-  if (rsiVal < 40 || (trendUp && pct24 > 0)) return { label: 'Accumulate', tone: 'buy', score: 2 };
-  if (rsiVal > 70 && !trendUp) return { label: 'Take profit', tone: 'sell', score: -3 };
-  if (rsiVal > 65 || (!trendUp && pct24 < 0)) return { label: 'Reduce', tone: 'sell', score: -1 };
-  return { label: 'Hold / observe', tone: 'neutral', score: 0 };
-}
-
 function SignalRow({ symbol }) {
   const candles = useLiveKlines(symbol, '15m', 96);
-  const closes = useMemo(() => candles.map((c) => c.close).filter((v) => v != null), [candles]);
-  const rsiVal = useMemo(() => rsi(closes, 14), [closes]);
-  const fast = useMemo(() => sma(closes, 12), [closes]);
-  const slow = useMemo(() => sma(closes, 26), [closes]);
-  const last = closes[closes.length - 1];
-  const open24 = closes[Math.max(0, closes.length - 96)];
-  const pct24 = last && open24 ? ((last - open24) / open24) * 100 : 0;
-  const sig = classifySignal({ rsiVal, fast, slow, pct24 });
+  const closes = useMemo(() => candleCloseSeries(candles), [candles]);
+  const sig = useMemo(() => buildMarketSignal(candles), [candles]);
+  const { rsiVal, fast, slow, last, pct24 } = sig;
   const liveCandle = candles[candles.length - 1];
   const live = !!liveCandle?.live;
   const base = symbol.replace(/USDT$/, '');
@@ -84,11 +45,11 @@ function SignalRow({ symbol }) {
           </span>
         </div>
       </td>
-      <td className="py-2 pr-3 font-mono">{last ? formatUSD(last) : '—'}</td>
-      <td className={`py-2 pr-3 font-mono ${pct24 >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>{last ? formatPct(pct24) : '—'}</td>
-      <td className="py-2 pr-3 font-mono">{rsiVal != null ? rsiVal.toFixed(1) : '—'}</td>
+      <td className="py-2 pr-3 font-mono">{last ? formatUSD(last) : '-'}</td>
+      <td className={`py-2 pr-3 font-mono ${pct24 >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>{last ? formatPct(pct24) : '-'}</td>
+      <td className="py-2 pr-3 font-mono">{rsiVal != null ? rsiVal.toFixed(1) : '-'}</td>
       <td className={`py-2 pr-3 font-mono ${fast != null && slow != null ? (fast > slow ? 'text-neon-green' : 'text-neon-red') : 'text-white/45'}`}>
-        {fast != null && slow != null ? (fast > slow ? 'Up' : 'Down') : '—'}
+        {fast != null && slow != null ? (fast > slow ? 'Up' : 'Down') : '-'}
       </td>
       <td className="py-2 pr-3 hidden md:table-cell">
         {path ? (
@@ -105,7 +66,7 @@ function SignalRow({ symbol }) {
 }
 
 export default function AITradingBotClient() {
-  const { user } = useSession();
+  const { user, loading } = useSession();
   const prices = useLivePrices(UNIVERSE);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(id); }, []);
@@ -121,24 +82,26 @@ export default function AITradingBotClient() {
   const breadthPct = total ? (up / total) * 100 : 0;
   const bias = breadthPct >= 60 ? { label: 'Risk-On', tone: 'text-neon-green' }
     : breadthPct <= 40 ? { label: 'Risk-Off', tone: 'text-neon-red' }
-    : { label: 'Mixed', tone: 'text-gold-300' };
+    : { label: 'Mixed', tone: 'text-cyan' };
 
   return (
     <>
       <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
         <span className="chip bg-white/5 border border-white/10 text-white/80">
-          <Sparkles className="h-3.5 w-3.5 text-gold-400"/> Aurelia AI · Oakmont Digital Markets Group
+          <Sparkles className="h-3.5 w-3.5 text-cyan"/> Aurelia AI · Oakmont Digital Markets Group
         </span>
         <h1 className="mt-4 text-3xl sm:text-4xl lg:text-5xl font-display leading-tight">
           <span className="text-gradient-neon">Real-time AI signals</span>
           <br/>across global crypto markets.
         </h1>
         <p className="mt-4 text-white/70 max-w-2xl text-base">
-          Live RSI, momentum, trend bias and 24-hour breadth — recomputed every 15 seconds from primary exchange feeds. Use the signals to inform your manual orders or to configure automated DCA / grid strategies inside your trading dashboard.
+          Live RSI, momentum, trend bias and 24-hour breadth, recomputed every 15 seconds from primary exchange feeds. Use the signals to inform your manual orders or to configure automated DCA / grid strategies inside your trading dashboard.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
-          {user ? (
-            <Link href="/dashboard#bot-section" className="btn-primary">Open Bot in Dashboard <ArrowRight className="h-4 w-4"/></Link>
+          {loading ? (
+            <span className="btn-ghost opacity-70"><Loader2 className="h-4 w-4 animate-spin"/> Checking session</span>
+          ) : user ? (
+             <Link href="/dashboard/analytics#live-signals" className="btn-primary">Open Bot in Dashboard <ArrowRight className="h-4 w-4"/></Link>
           ) : (
             <>
               <Link href="/signup" className="btn-primary">Activate AI Bot <ArrowRight className="h-4 w-4"/></Link>
@@ -155,7 +118,7 @@ export default function AITradingBotClient() {
           <p className="text-xs text-white/55 mt-1">{up} of {total} tracked pairs are up. Breadth {breadthPct.toFixed(0)}%.</p>
         </div>
         <div className="glass-strong p-4">
-          <div className="flex items-center gap-2 text-white/60 text-xs"><TrendingUp className="h-4 w-4 text-gold-400"/> Top mover</div>
+          <div className="flex items-center gap-2 text-white/60 text-xs"><TrendingUp className="h-4 w-4 text-cyan"/> Top mover</div>
           {(() => {
             const ranked = UNIVERSE.map((s) => ({ s, p: prices[s] })).filter((x) => x.p && isFinite(x.p.pct)).sort((a, b) => b.p.pct - a.p.pct);
             const m = ranked[0];
@@ -210,7 +173,7 @@ export default function AITradingBotClient() {
           </table>
         </div>
         <p className="text-[11px] text-white/45 mt-3">
-          Signals are computed from public Binance candles (15-minute resolution, 96-bar window). RSI &lt; 30 with rising 12/26 SMAs flags a Strong Buy; RSI &gt; 70 with falling SMAs flags Take Profit. Educational tool only — Oakmont DMG does not guarantee any returns and all trading carries risk of loss.
+          Signals are computed from public Binance candles (15-minute resolution, 96-bar window). RSI &lt; 30 with rising 12/26 SMAs flags a Strong Buy; RSI &gt; 70 with falling SMAs flags Take Profit. Educational tool only. Oakmont Digital Markets Group does not guarantee any returns and all trading carries risk of loss.
         </p>
       </section>
 
@@ -224,7 +187,7 @@ export default function AITradingBotClient() {
           const Icon = c.icon;
           return (
             <div key={c.title} className="glass-strong p-5">
-              <Icon className="h-7 w-7 text-gold-400 mb-3"/>
+              <Icon className="h-7 w-7 text-cyan mb-3"/>
               <h3 className="font-semibold">{c.title}</h3>
               <p className="text-xs text-white/60 mt-2">{c.desc}</p>
             </div>

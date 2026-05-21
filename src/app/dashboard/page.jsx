@@ -15,6 +15,7 @@ import { InvestModal, WithdrawModal, SellModal, BrokerageInvestModal } from '@/c
 import BrokerageHubPanel from '@/components/dashboard/BrokerageHubPanel';
 import BrokeragePositionsPanel from '@/components/dashboard/BrokeragePositionsPanel';
 import { useSession, api } from '@/lib/useSession';
+import { buildMarketSignal } from '@/lib/marketSignals';
 import { DepositAddressPanel, MarketsPanel, TestimonialComposer, SandboxOnRampPanel, EmailVerifyBanner, OpenOrdersPanel, BeneficiariesPanel, KycPanel, PortfolioPanel, PriceAlertsPanel, ConvertPanel, DcaPanel, ReferralPanel, SupportPanel, SupportContactPanel } from '@/components/dashboard/UserPanels';
 import { AvailableCashSelector } from '@/components/dashboard/AvailableCashSelector';
 import { useI18n } from '@/components/I18nProvider';
@@ -22,20 +23,8 @@ import { DASHBOARD_FEATURES } from './dashboardFeatures';
 
 // Default watchlist for anonymous visitors and users who haven't pinned
 // anything yet. Logged-in users override this via /api/watchlist.
-const DEFAULT_WATCHLIST_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT', 'ADAUSDT', 'DOGEUSDT'];
-// Demo data for anonymous visitors only — logged-in users get real data from /api/wallet
-const DEMO_WALLET_HOLDINGS = [
-    { key: 'BTCUSDT', sym: 'BTC', name: 'Bitcoin', bal: 1.245, color: '#f7931a' },
-    { key: 'ETHUSDT', sym: 'ETH', name: 'Ethereum', bal: 12.41, color: '#627eea' },
-    { key: 'SOLUSDT', sym: 'SOL', name: 'Solana',   bal: 84.5,  color: '#14f195' },
-    { key: null,      sym: 'USDT', name: 'Tether',   bal: 24800, color: '#26a17b' },
-];
-const DEMO_POSITION_TEMPLATE = [
-    { key: 'BTCUSDT', sym: 'BTC/USDT', side: 'LONG',  size: 0.4521, entry: 69284.12 },
-    { key: 'ETHUSDT', sym: 'ETH/USDT', side: 'LONG',  size: 4.2,    entry: 3712.55 },
-    { key: 'SOLUSDT', sym: 'SOL/USDT', side: 'SHORT', size: 28,     entry: 184.5 },
-    { key: 'XRPUSDT', sym: 'XRP/USDT', side: 'LONG',  size: 4200,   entry: 0.6045 },
-];
+const DEFAULT_WATCHLIST_SYMBOLS = DEFAULT_TICKER_SYMBOLS;
+const AI_SIGNAL_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'BNBUSDT', 'ADAUSDT', 'AVAXUSDT', 'LINKUSDT'];
 const INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d', '1w'];
 const HASH_TO_FEATURE = DASHBOARD_FEATURES.reduce((acc, item) => {
     if (item.hash) acc[item.hash] = item.id;
@@ -45,6 +34,33 @@ HASH_TO_FEATURE['bot-section'] = 'analytics';
 HASH_TO_FEATURE['alerts-section'] = 'security';
 HASH_TO_FEATURE['settings-section'] = 'security';
 const DASHBOARD_FEATURE_IDS = new Set(DASHBOARD_FEATURES.map((feature) => feature.id));
+
+function DashboardLiveSignalRow({ symbol }) {
+    const candles = useLiveKlines(symbol, '15m', 96);
+    const signal = useMemo(() => buildMarketSignal(candles), [candles]);
+    const market = candles[candles.length - 1];
+    const meta = SYMBOL_META[symbol] || { sym: symbol.replace(/USDT$/, ''), name: symbol };
+    const tone = signal.tone === 'buy' ? 'text-neon-green' : signal.tone === 'sell' ? 'text-neon-red' : 'text-white/70';
+    const chip = signal.tone === 'buy'
+        ? 'bg-neon-green/15 border-neon-green/30 text-neon-green'
+        : signal.tone === 'sell'
+            ? 'bg-neon-red/15 border-neon-red/30 text-neon-red'
+            : 'bg-white/5 border-white/10 text-white/70';
+    return (
+        <tr className="border-t border-white/5">
+            <td className="py-2 pr-3 font-semibold">{meta.sym}<span className="ml-1 text-[10px] text-white/40">/USDT</span></td>
+            <td className="py-2 pr-3 text-white/60">{meta.name}</td>
+            <td className="py-2 pr-3 font-mono">{signal.last ? formatUSD(signal.last, signal.last < 1 ? 4 : 2) : 'Connecting'}</td>
+            <td className={`py-2 pr-3 font-mono ${signal.pct24 >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>{signal.last ? formatPct(signal.pct24) : 'Connecting'}</td>
+            <td className={`py-2 pr-3 font-mono ${tone}`}>{signal.rsiVal != null ? signal.rsiVal.toFixed(1) : 'Tracking'}</td>
+            <td className={`py-2 pr-3 font-mono ${tone}`}>{signal.fast != null && signal.slow != null ? (signal.fast > signal.slow ? 'Up' : 'Down') : 'Tracking'}</td>
+            <td className="py-2 pr-3"><span className={`chip border text-[11px] ${chip}`}>{signal.label}</span></td>
+            <td className={market?.live ? 'py-2 text-neon-green text-[11px]' : 'py-2 text-white/45 text-[11px]'}>
+                {market?.live ? '● live' : 'syncing'}
+            </td>
+        </tr>
+    );
+}
 
 export default function DashboardPage({ initialFeature = 'overview' }) {
     const { user, loading } = useSession();
@@ -99,6 +115,8 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
     const [brokerageInvestOpen, setBrokerageInvestOpen] = useState(false);
     const [brokerageInvestSymbol, setBrokerageInvestSymbol] = useState('AAPL');
     const [brokerageInvestClass, setBrokerageInvestClass] = useState('stocks');
+    const [watchlistExpanded, setWatchlistExpanded] = useState(false);
+    const [historyExpanded, setHistoryExpanded] = useState(false);
     const [liveWallet, setLiveWallet] = useState(null);
     const refreshWallet = useCallback(async () => {
         if (!user) { setLiveWallet(null); return; }
@@ -125,6 +143,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
         }
         return DEFAULT_WATCHLIST_SYMBOLS;
     }, [user, watchlistBases]);
+    const visibleWatchlistSymbols = watchlistExpanded ? watchlistSymbols : watchlistSymbols.slice(0, 5);
     const removeFromWatchlist = useCallback(async (pair) => {
         if (!user) return;
         const base = pair.endsWith('USDT') ? pair.slice(0, -4) : pair;
@@ -156,15 +175,20 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
     const [price, setPrice] = useState('');
     const tradeMarket = livePrices[tradePair] || { price: 0, pct: 0, high: 0, low: 0, vol: 0, quoteVol: 0, live: false };
     const tradePctClass = tradeMarket.pct >= 0 ? 'text-neon-green' : 'text-neon-red';
+    const tradeSignal = useMemo(() => buildMarketSignal(candles, tradeMarket.pct), [candles, tradeMarket.pct]);
+    const tradeSignalClass = tradeSignal.tone === 'buy' ? 'text-neon-green' : tradeSignal.tone === 'sell' ? 'text-neon-red' : 'text-white/75';
+    const tradeSignalChip = tradeSignal.tone === 'buy' ? 'bg-neon-green/15 border-neon-green/30 text-neon-green'
+      : tradeSignal.tone === 'sell' ? 'bg-neon-red/15 border-neon-red/30 text-neon-red'
+      : 'bg-white/5 border-white/10 text-white/70';
     const effectivePrice = price || (tradeMarket.price ? tradeMarket.price.toFixed(2) : '0');
     // Wallet: real balances when logged in, demo for anonymous visitors.
     const wallets = useMemo(() => {
         const meta = {
-            BTC: { name: 'Bitcoin', color: '#f7931a', key: 'BTCUSDT' },
+            BTC: { name: 'Bitcoin', color: '#06d6c4', key: 'BTCUSDT' },
             ETH: { name: 'Ethereum', color: '#627eea', key: 'ETHUSDT' },
             SOL: { name: 'Solana', color: '#14f195', key: 'SOLUSDT' },
             XRP: { name: 'XRP', color: '#22c55e', key: 'XRPUSDT' },
-            BNB: { name: 'BNB', color: '#f3ba2f', key: 'BNBUSDT' },
+            BNB: { name: 'BNB', color: '#ffffff', key: 'BNBUSDT' },
             USDT: { name: 'Tether', color: '#26a17b', key: null },
             USDC: { name: 'USD Coin', color: '#2775ca', key: null },
         };
@@ -182,13 +206,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             });
         }
         if (user) return [];
-        // Anonymous visitors see demo data
-        return DEMO_WALLET_HOLDINGS.map((w) => {
-            const market = w.key ? livePrices[w.key] : null;
-            const px = w.key ? (market?.price ?? 0) : 1;
-            const openPx = w.key ? (market?.open ?? px) : 1;
-            return { ...w, price: px, openPrice: openPx, value: w.bal * px, openValue: w.bal * openPx };
-        });
+        return [];
     }, [liveWallet, livePrices, user]);
     const totalBalance = wallets.reduce((s, w) => s + w.value, 0);
     const portfolioOpenValue = wallets.reduce((s, w) => s + (w.openValue ?? w.value), 0);
@@ -201,22 +219,10 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
 
     // Live positions w/ mark + PnL (demo for anonymous, empty for logged-in without positions)
     const positions = useMemo(() => {
-        if (!user) {
-            // Anonymous visitors see demo positions
-            return DEMO_POSITION_TEMPLATE.map((p) => {
-                const mark = livePrices[p.key]?.price ?? p.entry;
-                const direction = p.side === 'LONG' ? 1 : -1;
-                const pnl = (mark - p.entry) * p.size * direction;
-                const roe = p.entry ? ((mark - p.entry) / p.entry) * 100 * direction : 0;
-                return { ...p, mark, pnl, roe };
-            });
-        }
-        // Logged-in users: real positions would come from an API endpoint
-        // For now, return empty array until /api/positions is implemented
         return [];
     }, [user, livePrices]);
     const openPnl = positions.reduce((s, p) => s + p.pnl, 0);
-    const cashUSDT = liveWallet ? (liveWallet.balances?.USDT || 0) : (user ? 0 : DEMO_WALLET_HOLDINGS.find((w) => w.sym === 'USDT').bal);
+    const cashUSDT = liveWallet ? (liveWallet.balances?.USDT || 0) : 0;
     const userBalances = liveWallet?.balances || {};
     const orderValue = (parseFloat(amount || '0') || 0) * (parseFloat(effectivePrice || '0') || 0);
     const handleTradePairChange = useCallback((pair) => {
@@ -234,6 +240,23 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
     const activeFeatureMeta = DASHBOARD_FEATURES.find((f) => f.id === activeFeature) || DASHBOARD_FEATURES[0];
     const featureHref = (feature) => feature.path || '/dashboard';
     const showAuthGate = !loading && !user && !['overview', 'trade', 'wallet'].includes(activeFeature);
+    const tradeHistory = liveWallet?.transactions || [];
+    const analyticsSeries = useMemo(() => {
+      const days = 14;
+      const buckets = new Array(days).fill(0);
+      const now = Date.now();
+      const dayMs = 86_400_000;
+      for (const tx of tradeHistory) {
+        if (!['invest', 'buy', 'sell', 'brokerage_invest'].includes(tx.type) || !tx.createdAt) continue;
+        const age = Math.floor((now - tx.createdAt) / dayMs);
+        if (age >= 0 && age < days) buckets[days - 1 - age] += Number(tx.usdValue) || 0;
+      }
+      return buckets;
+    }, [tradeHistory]);
+    const completedTrades = tradeHistory.filter((tx) => ['invest', 'buy', 'sell', 'brokerage_invest'].includes(tx.type) && tx.status === 'completed').length;
+    const averageTradeValue = completedTrades
+      ? tradeHistory.filter((tx) => ['invest', 'buy', 'sell', 'brokerage_invest'].includes(tx.type) && tx.status === 'completed').reduce((s, tx) => s + (Number(tx.usdValue) || 0), 0) / completedTrades
+      : 0;
 
     return (<div className="flex">
       <Sidebar />
@@ -244,11 +267,11 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
           <section className="glass-strong p-4 sm:p-5">
             <div className="flex flex-col lg:flex-row lg:items-end gap-4">
               <div className="flex-1">
-                <p className="text-xs uppercase tracking-[0.24em] text-gold-300/80">Dedicated workspace</p>
+                  <p className="text-xs uppercase tracking-[0.24em] text-cyan/80">Dedicated workspace</p>
                 <h1 className="mt-1 text-2xl sm:text-3xl font-display">{activeFeatureMeta.label}</h1>
                 <p className="mt-1 text-sm text-white/60 max-w-3xl">{activeFeatureMeta.blurb}</p>
               </div>
-              <Link href="/brokerage" className="btn-gold text-sm self-start lg:self-auto">Open full brokerage</Link>
+              <Link href={user ? '/dashboard/brokerage' : '/brokerage'} className="btn-primary text-sm self-start lg:self-auto">Open full brokerage</Link>
             </div>
             <div className="mt-4 flex gap-2 overflow-x-auto no-scrollbar pb-1">
               {DASHBOARD_FEATURES.map((feature) => (
@@ -257,7 +280,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                   href={featureHref(feature)}
                   className={`shrink-0 rounded-xl border px-3 py-2 text-xs sm:text-sm transition ${
                     activeFeature === feature.id
-                      ? 'bg-gold-500/15 border-gold-400/45 text-gold-200'
+                      ? 'bg-neon-green/15 border-neon-green/45 text-neon-green'
                       : 'bg-white/5 border-white/10 text-white/65 hover:bg-white/10 hover:text-white'
                   }`}
                 >
@@ -267,18 +290,18 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             </div>
           </section>
           {loading && (
-            <section className="glass-strong p-5">
+            <section id="live-signals" className="glass-strong p-5">
               <p className="text-sm text-white/60">Checking secure session…</p>
               <h2 className="mt-1 text-2xl font-display">Preparing your dedicated workspace.</h2>
             </section>
           )}
           {showAuthGate && (
-            <section className="glass-strong p-5 border-gold-400/25">
+            <section className="glass-strong p-5 border-cyan/25">
               <p className="text-sm text-white/60">{activeFeatureMeta.label} workspace</p>
               <h2 className="mt-1 text-2xl font-display">Sign in to view live {activeFeatureMeta.label.toLowerCase()} content.</h2>
               <p className="mt-2 text-sm text-white/60 max-w-2xl">Each feature now has its own page on desktop and mobile. Secure account data stays hidden until your session is confirmed.</p>
               <div className="mt-4 flex flex-wrap gap-3">
-                <a href="/login?next=/dashboard" className="btn-gold text-sm">Sign in</a>
+                <a href="/login?next=/dashboard" className="btn-primary text-sm">Sign in</a>
                 <a href="/signup" className="btn-outline text-sm">Create account</a>
               </div>
             </section>
@@ -312,7 +335,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             <AvailableCashSelector wallets={wallets} livePrices={livePrices} />
             <div className="glass p-5">
               <p className="text-sm text-white/60">{t('openPnL')}</p>
-              <p className={`text-2xl font-display mt-1 ${openPnl >= 0 ? 'text-gold-400' : 'text-neon-red'}`}>{openPnl >= 0 ? '+' : ''}{formatUSD(openPnl)}</p>
+              <p className={`text-2xl font-display mt-1 ${openPnl >= 0 ? 'text-cyan' : 'text-neon-red'}`}>{openPnl >= 0 ? '+' : ''}{formatUSD(openPnl)}</p>
               <p className="text-xs text-white/50 mt-1">{positions.length} {t('openPositions')}</p>
             </div>
           </section> : <section className="glass-strong p-5">
@@ -329,9 +352,9 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             <section className="grid sm:grid-cols-2 xl:grid-cols-4 gap-4">
               {DASHBOARD_FEATURES.filter((f) => f.id !== 'overview').map((feature) => (
                 <a key={feature.id} href={featureHref(feature)} className="glass p-4 hover:bg-white/10 transition group">
-                  <p className="text-sm font-semibold group-hover:text-gold-200">{feature.label}</p>
-                  <p className="mt-1 text-xs text-white/55">{feature.blurb}</p>
-                  <span className="mt-4 inline-flex text-[11px] text-neon-green">Open dedicated page →</span>
+                   <p className="text-sm font-semibold group-hover:text-neon-green">{feature.label}</p>
+                   <p className="mt-1 text-xs text-white/55">{feature.blurb}</p>
+                    <span className="mt-4 inline-flex text-[11px] text-neon-green">Open</span>
                 </a>
               ))}
             </section>
@@ -377,6 +400,13 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                 <div className="glass-light p-2 text-center"><p className="text-white/50">24h Low</p><p className="font-semibold mt-0.5">{formatUSD(tradeMarket.low || 0)}</p></div>
                 <div className="glass-light p-2 text-center"><p className="text-white/50">24h Vol ({selectedMarketMeta.sym})</p><p className="font-semibold mt-0.5">{(tradeMarket.vol || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</p></div>
                 <div className="glass-light p-2 text-center"><p className="text-white/50">24h Vol ({quoteSymbol})</p><p className="font-semibold mt-0.5">{formatUSD(tradeMarket.quoteVol || 0)}</p></div>
+              </div>
+              <div className="mt-3 glass-light p-3 flex flex-wrap items-center gap-3 text-xs">
+                <span className="text-white/50">Live signal for {selectedMarketMeta.sym}/{quoteSymbol}</span>
+                <span className={`chip border text-[11px] ${tradeSignalChip}`}>{tradeSignal.label}</span>
+                <span className={tradeSignalClass}>RSI {tradeSignal.rsiVal != null ? tradeSignal.rsiVal.toFixed(1) : '-'}</span>
+                <span className={tradeSignalClass}>Trend {tradeSignal.fast != null && tradeSignal.slow != null ? (tradeSignal.fast > tradeSignal.slow ? 'Up' : 'Down') : 'Tracking'}</span>
+                <span className={tradeMarket.live ? 'text-neon-green' : 'text-white/45'}>{tradeMarket.live ? '● live' : 'syncing'}</span>
               </div>
             </div>
 
@@ -466,6 +496,35 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
           {user && activeFeature === 'wallet' && <SandboxOnRampPanel />}
           {user && activeFeature === 'positions' && <OpenOrdersPanel />}
           {user && activeFeature === 'security' && <section id="security-section"><KycPanel /></section>}
+          {user && activeFeature === 'analytics' && (
+            <section className="glass-strong p-5">
+              <div className="flex items-center flex-wrap gap-2 mb-3">
+                <Bot className="h-4 w-4 text-cyan"/>
+                <h3 className="font-display text-lg">Live AI signals</h3>
+                <span className="chip bg-neon-green/15 text-neon-green border border-neon-green/30 text-[10px]">● per-symbol</span>
+              </div>
+              <p className="text-xs text-white/55 mb-3">Aurelia computes each pair independently from live 15-minute candles, keeping the symbol, price, RSI, trend, and signal visible inside the dashboard.</p>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-xs text-white/50 text-left">
+                    <tr>
+                      <th className="py-2 pr-3 font-medium">Pair</th>
+                      <th className="py-2 pr-3 font-medium">Asset</th>
+                      <th className="py-2 pr-3 font-medium">Last</th>
+                      <th className="py-2 pr-3 font-medium">24h</th>
+                      <th className="py-2 pr-3 font-medium">RSI</th>
+                      <th className="py-2 pr-3 font-medium">Trend</th>
+                      <th className="py-2 pr-3 font-medium">Signal</th>
+                      <th className="py-2 font-medium">Feed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {AI_SIGNAL_SYMBOLS.map((symbol) => <DashboardLiveSignalRow key={symbol} symbol={symbol}/>)}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
           {user && activeFeature === 'analytics' && <PortfolioPanel />}
           {user && activeFeature === 'wallet' && <ConvertPanel onConverted={refreshWallet} />}
           {user && activeFeature === 'wallet' && <DcaPanel onChanged={refreshWallet} />}
@@ -485,10 +544,12 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             <div className="glass-strong p-4 xl:col-span-1">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">Watchlist</p>
-                <button className="text-xs text-white/55 hover:text-white">View all</button>
+                <button onClick={() => setWatchlistExpanded((v) => !v)} className="text-xs text-white/55 hover:text-white">
+                  {watchlistExpanded ? 'Show less' : 'View all'}
+                </button>
               </div>
               <div className="mt-3 divide-y divide-white/5">
-                {watchlistSymbols.map((s, i) => {
+                {visibleWatchlistSymbols.map((s, i) => {
                   const meta = SYMBOL_META[s];
                   const d = livePrices[s];
                   if (!meta) return null;
@@ -500,7 +561,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                       <a href={`/markets/${base}`} className="h-8 w-8 rounded-full inline-flex items-center justify-center text-[11px] font-bold text-ink-950 hover:opacity-90 bg-white/5 border border-white/10" style={cryptoLogoStyle(meta.sym) || { background: meta.color }} aria-label={`Open ${meta.sym} details`}>
                         {!cryptoLogoStyle(meta.sym) && <Wallet className="h-4 w-4 text-white/75"/>}
                       </a>
-                      <a href={`/markets/${base}`} className="flex-1 min-w-0 hover:text-neon-gold">
+                      <a href={`/markets/${base}`} className="flex-1 min-w-0 hover:text-neon-green">
                         <p className="text-sm font-medium">{meta.sym}</p>
                         <p className="text-[11px] text-white/50 truncate">{meta.name}</p>
                       </a>
@@ -512,7 +573,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                       {canRemove && (
                         <button
                           onClick={() => removeFromWatchlist(s)}
-                          className="ml-1 p-1 text-neon-gold/80 hover:text-neon-gold"
+                          className="ml-1 p-1 text-neon-green/80 hover:text-neon-green"
                           aria-label={`Remove ${meta.sym} from watchlist`}
                           title="Remove from watchlist"
                         >
@@ -522,7 +583,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                     </div>);
                 })}
                 {user && Array.isArray(watchlistBases) && watchlistBases.length === 0 && (
-                  <p className="text-[11px] text-white/45 py-3">Tap the ★ on any asset to pin it here.</p>
+                  <p className="text-[11px] text-white/45 py-3">Showing the default live symbols. Tap the star on any market row to build a custom list.</p>
                 )}
               </div>
             </div>
@@ -599,13 +660,17 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             <div className="glass-strong p-5">
               <div className="flex items-center justify-between">
                 <p className="font-semibold">P&L · last 30 days</p>
-                <span className={`text-xs ${openPnl >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>{openPnl >= 0 ? '+' : ''}{formatUSD(openPnl + 6900)}</span>
+                <span className={`text-xs ${openPnl >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>{openPnl >= 0 ? '+' : ''}{formatUSD(openPnl)}</span>
               </div>
-              <BarChart data={[12, 18, 9, 22, 14, 28, 19, 31, 24, 36, 28, 41, 33, 22, 38]} color="#00ffa3"/>
+              {analyticsSeries.some((v) => v > 0) ? (
+                <BarChart data={analyticsSeries} color="#00ffa3"/>
+              ) : (
+                <div className="h-[160px] flex items-center justify-center text-sm text-white/45">No completed trades yet.</div>
+              )}
               <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
-                <div className="glass-light p-2 text-center"><p className="text-white/50">Win rate</p><p className="font-semibold mt-1">68%</p></div>
-                <div className="glass-light p-2 text-center"><p className="text-white/50">Trades</p><p className="font-semibold mt-1">142</p></div>
-                <div className="glass-light p-2 text-center"><p className="text-white/50">Avg ROE</p><p className="font-semibold mt-1 text-neon-green">+2.4%</p></div>
+                <div className="glass-light p-2 text-center"><p className="text-white/50">Win rate</p><p className="font-semibold mt-1">{completedTrades ? 'Live' : '-'}</p></div>
+                <div className="glass-light p-2 text-center"><p className="text-white/50">Trades</p><p className="font-semibold mt-1">{completedTrades}</p></div>
+                <div className="glass-light p-2 text-center"><p className="text-white/50">Avg value</p><p className="font-semibold mt-1 text-neon-green">{averageTradeValue ? formatUSD(averageTradeValue) : '-'}</p></div>
               </div>
             </div>
 
@@ -628,8 +693,8 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                       : null
                     : null;
                   const trend = portfolioMarketPct >= 0
-                    ? `Portfolio is up ${portfolioMarketPct.toFixed(2)}% on the day — momentum looks constructive.`
-                    : `Portfolio is down ${Math.abs(portfolioMarketPct).toFixed(2)}% on the day — review stop levels and avoid new aggressive entries.`;
+                    ? `Portfolio is up ${portfolioMarketPct.toFixed(2)}% on the day - momentum looks constructive.`
+                    : `Portfolio is down ${Math.abs(portfolioMarketPct).toFixed(2)}% on the day - review stop levels and avoid new aggressive entries.`;
                   return totalBalance > 0 ? (
                     <div className="mt-3 space-y-3">
                       <div className="grid grid-cols-3 gap-2 text-xs">
@@ -642,7 +707,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                         <div className="space-y-1.5">
                           {movers.length ? movers.map((m) => (
                             <div key={m.sym} className="glass-light p-2 flex items-center gap-2 text-xs">
-                              <Zap className="h-3.5 w-3.5 text-gold-400"/>
+                               <Zap className="h-3.5 w-3.5 text-cyan"/>
                               <span className="flex-1 font-semibold">{m.sym}</span>
                               <span className={m.deltaPct >= 0 ? 'text-neon-green' : 'text-neon-red'}>{m.deltaPct >= 0 ? '+' : ''}{m.deltaPct.toFixed(2)}%</span>
                             </div>
@@ -652,12 +717,12 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                       <div className="glass-light p-3 text-xs space-y-1.5 border border-neon-green/20">
                         <p className="font-semibold text-neon-green">AI insight</p>
                         <p className="text-white/75">{trend}</p>
-                        {concentration && <p className="text-gold-300">{concentration}</p>}
+                         {concentration && <p className="text-cyan">{concentration}</p>}
                       </div>
                     </div>
                   ) : (
                     <div className="mt-3 space-y-2">
-                      <p className="text-xs text-white/55">No positions yet — here are live AI signals you can act on.</p>
+                      <p className="text-xs text-white/55">No positions yet - here are live AI signals you can act on.</p>
                       {(() => {
                         const watch = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'];
                         return watch.map((s) => {
@@ -683,7 +748,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                           );
                         });
                       })()}
-                      <a href="/ai-trading-bot" className="btn-ghost w-full text-xs justify-center">View all live signals</a>
+                       <Link href="/dashboard/analytics#live-signals" className="btn-ghost w-full text-xs justify-center">View all live signals</Link>
                       <p className="text-[11px] text-white/45 text-center">Fund your wallet to apply these signals to your portfolio automatically.</p>
                     </div>
                   );
@@ -692,7 +757,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                 <>
                   <div className="mt-3 space-y-2">
                     {['Grid · SOL/USDT', 'DCA · BTC', 'Arbitrage · ETH'].map((s, i) => (<div key={s} className="glass-light p-3 flex items-center gap-3">
-                        <Zap className="h-4 w-4 text-gold-400"/>
+                        <Zap className="h-4 w-4 text-cyan"/>
                         <p className="text-sm flex-1">{s}</p>
                         <span className="text-xs text-neon-green">+{(2.4 + i * 1.7).toFixed(1)}%</span>
                       </div>))}
@@ -707,7 +772,9 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
           {user && activeFeature === 'history' && <section id="history-section" className="glass-strong p-4">
             <div className="flex items-center justify-between">
               <p className="font-semibold">Transaction history</p>
-              <button className="text-xs text-white/55 hover:text-white flex items-center gap-1"><Eye className="h-3.5 w-3.5"/> View all</button>
+              <button onClick={() => setHistoryExpanded((v) => !v)} className="text-xs text-white/55 hover:text-white flex items-center gap-1">
+                <Eye className="h-3.5 w-3.5"/> {historyExpanded ? 'Show less' : 'View all'}
+              </button>
             </div>
             <div className="mt-3 overflow-x-auto -mx-4 px-4">
               <table className="min-w-full text-sm">
@@ -722,12 +789,12 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {liveWallet?.transactions?.length ? liveWallet.transactions.slice(0, 10).map((t, i) => {
+                  {liveWallet?.transactions?.length ? liveWallet.transactions.slice(0, historyExpanded ? liveWallet.transactions.length : 10).map((t, i) => {
                     const displayType = t.type === 'invest' ? 'Buy' : t.type === 'admin_credit' ? 'Deposit' : t.type === 'withdraw' ? 'Withdraw' : t.type;
                     const isIn = displayType === 'Buy' || displayType === 'Deposit';
                     return (<tr key={i}>
                         <td className="py-2.5">
-                          <span className={`chip ${isIn ? 'bg-neon-green/15 text-neon-green' : 'bg-neon-orange/15 text-neon-orange'}`}>
+                          <span className={`chip ${isIn ? 'bg-neon-green/15 text-neon-green' : 'bg-cyan/15 text-cyan'}`}>
                             {isIn ? <ArrowDownLeft className="h-3 w-3"/> : <ArrowUpRight className="h-3 w-3"/>}
                             {displayType}
                           </span>

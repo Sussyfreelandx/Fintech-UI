@@ -43,6 +43,9 @@ function SignupForm() {
           <BrandLogo compact className="lg:hidden mb-4" textClassName="text-xl" />
           <h1 className="text-2xl font-display">Create your Oakmont Digital Markets Group account</h1>
           <p className="text-sm text-white/60 mt-1">Trade and invest across stocks, ETFs, crypto, forex, commodities, futures and options with institutional-grade tools.</p>
+          <div className="mt-4 rounded-xl border border-cyan/30 bg-cyan/10 px-3 py-2 text-sm text-white/80">
+            <Gift className="inline h-4 w-4 text-cyan mr-1"/> New verified accounts receive an automatic $100 USDT trading credit after signup.
+          </div>
           <form className="mt-6 space-y-3" onSubmit={onSubmit}>
             <label className="block">
               <span className="text-xs text-white/55">Full name</span>
@@ -84,7 +87,7 @@ function SignupForm() {
               I agree to the Oakmont Digital Markets Group Terms of Service, Privacy Policy, and Risk Disclosure.
             </label>
             {error && <p className="text-xs text-neon-red bg-neon-red/10 border border-neon-red/30 rounded-lg px-3 py-2">{error}</p>}
-            <button disabled={busy} className="btn-gold w-full disabled:opacity-60">
+            <button disabled={busy} className="btn-primary w-full disabled:opacity-60">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin"/> Creating…</> : 'Create account'}
             </button>
           </form>
@@ -96,15 +99,16 @@ function SignupForm() {
       <section className="hidden lg:flex w-1/2 relative items-center justify-center p-12 overflow-hidden">
         <div className="absolute inset-0 bg-grid opacity-30"/>
         <div className="absolute -top-20 -right-20 h-[420px] w-[420px] rounded-full bg-neon-green/10 blur-3xl"/>
-        <div className="absolute -bottom-40 -left-20 h-[420px] w-[420px] rounded-full bg-gold-500/10 blur-3xl"/>
+        <div className="absolute -bottom-40 -left-20 h-[420px] w-[420px] rounded-full bg-neon-green/10 blur-3xl"/>
         <div className="relative max-w-md">
           <h2 className="text-3xl font-display leading-tight">
-            Join <span className="text-gradient-gold">4.1M+ investors</span><br />on Oakmont Digital Markets Group.
+            Join <span className="text-gradient-neon">4.1M+ investors</span><br />on Oakmont Digital Markets Group.
           </h2>
           <p className="mt-3 text-white/65">Onboard in minutes. Full KYC verification typically completes in under an hour.</p>
           <ul className="mt-6 space-y-3 text-sm text-white/75">
             {[
-            'Spot, futures & OTC desk',
+             'Automatic $100 USDT trading credit',
+             'Spot, futures & OTC desk',
             'AI Trading Bot · Aurelia',
             'Managed portfolios & yield',
             'Institutional API · FIX 4.4',

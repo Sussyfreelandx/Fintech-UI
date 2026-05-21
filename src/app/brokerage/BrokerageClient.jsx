@@ -49,6 +49,11 @@ function fmtVol(v) {
   if (v >= 1e3)  return `${(v/1e3).toFixed(2)}K`;
   return v.toFixed(0);
 }
+function signalTone(signal) {
+  if (['Strong buy', 'Accumulate'].includes(signal)) return 'bg-neon-green/15 border-neon-green/30 text-neon-green';
+  if (['Take profit', 'Reduce'].includes(signal)) return 'bg-neon-red/15 border-neon-red/30 text-neon-red';
+  return 'bg-white/5 border-white/10 text-white/70';
+}
 
 function MiniSpark({ candles }) {
   if (!candles || candles.length < 2) return null;
@@ -108,6 +113,7 @@ function QuoteRow({ q, onOpen }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-white truncate">{q.symbol}</p>
         <p className="text-[11px] text-white/55 truncate">{q.name || q.exchange || ''}</p>
+        <span className={`mt-1 chip border text-[10px] ${signalTone(q.signal)}`}>{q.signal || 'Hold / observe'}</span>
       </div>
       <div className="hidden sm:block"><MiniSpark candles={q._spark}/></div>
       <div className="text-right min-w-[6.5rem]">
@@ -156,7 +162,7 @@ function QuoteDetail({ q, onClose }) {
         </div>
         <div className="flex flex-wrap gap-1 mb-3">
           {RANGE_PRESETS.map((r) => (
-            <button key={r.id} onClick={() => setRangeId(r.id)} className={`px-2 py-1 rounded text-[11px] ${rangeId === r.id ? 'bg-gold-400/20 text-gold-300 border border-gold-400/40' : 'bg-white/5 text-white/65 border border-white/10 hover:bg-white/10'}`}>
+            <button key={r.id} onClick={() => setRangeId(r.id)} className={`px-2 py-1 rounded text-[11px] ${rangeId === r.id ? 'bg-neon-green/15 text-neon-green border border-neon-green/40' : 'bg-white/5 text-white/65 border border-white/10 hover:bg-white/10'}`}>
               {r.label}
             </button>
           ))}
@@ -173,17 +179,17 @@ function QuoteDetail({ q, onClose }) {
           {loading
             ? ' Checking your active session before showing trade actions.'
             : user
-            ? ' Your Oakmont DMG brokerage account is active — place an order from your trading dashboard.'
-            : ' To place an order, open a verified Oakmont DMG brokerage account.'}
+            ? ' Your Oakmont Digital Markets Group brokerage account is active. Place an order from your trading dashboard.'
+            : ' To place an order, open a verified Oakmont Digital Markets Group brokerage account.'}
         </p>
         <div className="mt-3 flex gap-2">
           {loading ? (
             <span className="btn-ghost text-xs opacity-70"><Loader2 className="h-3.5 w-3.5 animate-spin"/> Checking session…</span>
           ) : user ? (
-            <Link href="/dashboard" className="btn-gold text-xs">Trade now in Dashboard</Link>
+            <Link href="/dashboard/brokerage" className="btn-primary text-xs">Trade now in Dashboard</Link>
           ) : (
             <>
-              <Link href="/signup" className="btn-gold text-xs">Open Brokerage Account</Link>
+              <Link href="/signup" className="btn-primary text-xs">Open Brokerage Account</Link>
               <Link href="/login?next=/dashboard" className="btn-ghost text-xs">Sign in to Trade</Link>
             </>
           )}
@@ -240,7 +246,7 @@ function BrokerageBoard({ assetClass }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[12rem]">
           <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-white/40"/>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search symbol or name" className="w-full pl-7 pr-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-gold-400/40"/>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search symbol or name" className="w-full pl-7 pr-3 py-1.5 rounded bg-white/5 border border-white/10 text-sm focus:outline-none focus:border-neon-green/40"/>
         </div>
         <button onClick={load} disabled={loading} className="text-xs text-white/55 hover:text-white inline-flex items-center gap-1 disabled:opacity-50">
           {loading ? <Loader2 className="h-3 w-3 animate-spin"/> : <RefreshCw className="h-3 w-3"/>} Refresh
@@ -368,7 +374,7 @@ function OptionsBoard() {
                   </thead>
                   <tbody>
                     {data[side].slice(0, 25).map((c) => (
-                      <tr key={c.contractSymbol} className={`border-t border-white/5 ${c.inTheMoney ? 'bg-gold-500/10' : ''}`}>
+                       <tr key={c.contractSymbol} className={`border-t border-white/5 ${c.inTheMoney ? 'bg-neon-green/10' : ''}`}>
                         <td className="py-1">{c.strike}</td>
                         <td className="py-1 text-right">{c.lastPrice?.toFixed?.(2) ?? '-'}</td>
                         <td className="py-1 text-right">{c.bid?.toFixed?.(2) ?? '-'}</td>
@@ -412,15 +418,15 @@ export default function BrokerageClient({ initialTab = 'stocks' }) {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <span className="chip bg-white/5 border border-white/10 text-white/80"><Activity className="h-3.5 w-3.5 text-neon-green"/> Multi-asset brokerage · live market data</span>
         <h1 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-display tracking-tight">
-          Trade everything from <span className="text-gradient-gold">stocks &amp; ETFs</span> to <span className="text-gradient-neon">crypto, FX &amp; futures</span>.
+          Trade everything from <span className="text-gradient-neon">stocks &amp; ETFs</span> to <span className="text-gradient-neon">crypto, FX &amp; futures</span>.
         </h1>
         <p className="mt-3 text-white/65 max-w-3xl">
-          Oakmont Digital Markets Group operates as a regulated multi-asset brokerage. Every quote, chart and options chain on this page is streamed live from the primary exchange feed - no mock data, no placeholders. Verified clients route orders through our smart execution layer with transparent spreads and commissions.
+          Oakmont Digital Markets Group operates as a regulated multi-asset brokerage. Every quote, chart and options chain on this page is streamed live from the primary exchange feed - no mock data, no inactive screens. Verified clients route orders through our smart execution layer with transparent spreads and commissions.
         </p>
       </motion.div>
       <div className="flex flex-wrap gap-1.5">
         {TABS.map((t) => (
-          <Link key={t.id} href={`/brokerage/${t.id}`} onClick={(e) => { e.preventDefault(); selectTab(t.id); }} className={`px-3 py-1.5 rounded-full text-xs sm:text-sm transition ${tab === t.id ? 'bg-gold-400/20 text-gold-300 border border-gold-400/40' : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'}`}>
+          <Link key={t.id} href={`/brokerage/${t.id}`} onClick={(e) => { e.preventDefault(); selectTab(t.id); }} className={`px-3 py-1.5 rounded-full text-xs sm:text-sm transition ${tab === t.id ? 'bg-neon-green/15 text-neon-green border border-neon-green/40' : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'}`}>
             {t.label}
           </Link>
         ))}
@@ -431,7 +437,7 @@ export default function BrokerageClient({ initialTab = 'stocks' }) {
       </section>
       <section className="grid md:grid-cols-3 gap-3">
         <div className="glass p-4">
-          <BarChart3 className="h-5 w-5 text-gold-400"/>
+          <BarChart3 className="h-5 w-5 text-cyan"/>
           <h3 className="font-display mt-2">Brokerage account</h3>
           <p className="text-sm text-white/65 mt-1">Single account, every asset class. Stocks, ETFs, options, futures, forex, commodities and crypto in one balance.</p>
         </div>
@@ -441,48 +447,39 @@ export default function BrokerageClient({ initialTab = 'stocks' }) {
           <p className="text-sm text-white/65 mt-1">Smart order routing to NYSE, NASDAQ, CME, CBOT, COMEX, NYMEX, and global FX venues with real-time fills.</p>
         </div>
         <div className="glass p-4">
-          <Activity className="h-5 w-5 text-neon-orange"/>
+          <Activity className="h-5 w-5 text-cyan"/>
           <h3 className="font-display mt-2">Risk &amp; reporting</h3>
           <p className="text-sm text-white/65 mt-1">Real-time PnL, margin, exposure and tax-ready statements. Suitable for retail, professional and institutional clients.</p>
         </div>
       </section>
       <section className="glass-strong p-4 sm:p-5">
         <div className="flex items-center flex-wrap gap-2 mb-3">
-          <h2 className="font-display text-xl">Brokerage venues &amp; routing partners</h2>
-          <span className="chip bg-neon-green/15 text-neon-green border border-neon-green/30 text-[10px]">● live aggregation</span>
+          <h2 className="font-display text-xl">Live asset class status</h2>
+          <span className="chip bg-neon-green/15 text-neon-green border border-neon-green/30 text-[10px]">● visible to users</span>
         </div>
         <p className="text-sm text-white/65 max-w-3xl">
-          Oakmont Digital Markets Group aggregates liquidity across regulated brokerages and exchanges so a single Oakmont account can express any view. Execution is routed by asset class to the venue with best price, depth and settlement at the time of order.
+          Oakmont Digital Markets Group displays every supported asset class with live symbols, quotes, charts and market signals. Verified users can open the brokerage workspace from this page and invest through the account-level order ticket.
         </p>
         <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-          {[
-            { name: 'Charles Schwab',       desc: 'US equities, ETFs, options',       cat: 'Stocks · ETFs · Options' },
-            { name: 'Fidelity',             desc: 'US equities, mutual funds, fixed income', cat: 'Stocks · Funds · Bonds' },
-            { name: 'Interactive Brokers',  desc: 'Global multi-asset prime',          cat: 'Stocks · Futures · FX · Options' },
-            { name: 'Coinbase',             desc: 'USD-regulated crypto exchange',     cat: 'Crypto spot · Custody' },
-            { name: 'Binance',              desc: 'Deepest global crypto liquidity',   cat: 'Crypto spot · Live feed' },
-            { name: 'Kraken',               desc: 'EU / US crypto + crypto derivatives', cat: 'Crypto · Margin · Futures' },
-            { name: 'OANDA',                desc: 'Institutional FX & CFD pricing',    cat: 'Forex · Commodities · Indices' },
-            { name: 'Forex.com',            desc: 'Retail FX & CFD execution',         cat: 'Forex · Commodities · Indices' },
-          ].map((v) => (
-            <div key={v.name} className="glass-light p-3">
-              <p className="text-sm font-semibold text-white">{v.name}</p>
-              <p className="text-[11px] text-white/55 mt-0.5">{v.desc}</p>
-              <p className="text-[10px] text-gold-300/85 mt-1">{v.cat}</p>
+          {TABS.map((v) => (
+            <div key={v.id} className="glass-light p-3">
+              <p className="text-sm font-semibold text-white">{v.label}</p>
+              <p className="text-[11px] text-white/55 mt-0.5">{v.blurb}</p>
+              <p className="text-[10px] text-cyan/85 mt-1">Live symbols and user-visible signals</p>
             </div>
           ))}
         </div>
         <p className="mt-4 text-[11px] text-white/45">
-          Venue list is illustrative of the brokerage and exchange partners Oakmont Digital Markets Group aggregates for live pricing and routing. Specific routing is determined per-order in line with our best execution policy and disclosed on every fill.
+          No placeholder venue list is shown. Live availability is determined by the brokerage and crypto market data feeds.
         </p>
       </section>
       <div className="text-center pt-2">
         {loading ? (
           <span className="btn-ghost opacity-70"><Loader2 className="h-4 w-4 animate-spin"/> Checking session…</span>
         ) : user ? (
-          <Link href="/dashboard" className="btn-gold">Trade now in your Dashboard <ArrowRight className="h-4 w-4"/></Link>
+          <Link href="/dashboard/brokerage" className="btn-primary">Trade now in your Dashboard <ArrowRight className="h-4 w-4"/></Link>
         ) : (
-          <Link href="/signup" className="btn-gold">Open a Brokerage Account <ArrowRight className="h-4 w-4"/></Link>
+          <Link href="/signup" className="btn-primary">Open a Brokerage Account <ArrowRight className="h-4 w-4"/></Link>
         )}
       </div>
     </div>
