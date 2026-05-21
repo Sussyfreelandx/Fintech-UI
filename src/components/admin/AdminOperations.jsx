@@ -52,10 +52,10 @@ export function AdminOperations() {
     return <div className="glass-strong p-6 flex items-center gap-2 text-sm text-white/65"><Loader2 className="h-4 w-4 animate-spin"/> Loading admin operations…</div>;
   }
   if (!user) {
-    return <div className="glass-strong p-6 text-sm flex items-center gap-3"><Lock className="h-5 w-5 text-gold-400"/>Sign in as an administrator to access live admin operations. <a href="/login" className="ml-auto btn-primary text-xs">Sign in</a></div>;
+    return <div className="glass-strong p-6 text-sm flex items-center gap-3"><Lock className="h-5 w-5 text-cyan"/>Sign in as an administrator to access live admin operations. <a href="/login" className="ml-auto btn-primary text-xs">Sign in</a></div>;
   }
   if (!user.isAdmin) {
-    return <div className="glass-strong p-6 text-sm flex items-center gap-3 text-neon-orange"><AlertCircle className="h-5 w-5"/> Your account is not an administrator. Set <code className="px-1 py-0.5 rounded bg-white/10">ADMIN_EMAIL</code> + <code className="px-1 py-0.5 rounded bg-white/10">ADMIN_PASSWORD</code> environment variables and sign in with that account.</div>;
+    return <div className="glass-strong p-6 text-sm flex items-center gap-3 text-cyan"><AlertCircle className="h-5 w-5"/> Your account is not an administrator. Set <code className="px-1 py-0.5 rounded bg-white/10">ADMIN_EMAIL</code> + <code className="px-1 py-0.5 rounded bg-white/10">ADMIN_PASSWORD</code> environment variables and sign in with that account.</div>;
   }
 
   return (
@@ -142,7 +142,7 @@ function CreditForm({ users, onDone }) {
     e.preventDefault(); setBusy(true); setMsg(null);
     try {
       if (!cryptoAmount || cryptoAmount <= 0) throw new Error('Enter a positive amount.');
-      if (denom === 'usd' && !livePrice) throw new Error('Live price unavailable for this asset — try again in a moment.');
+      if (denom === 'usd' && !livePrice) throw new Error('Live price unavailable for this asset - try again in a moment.');
       const r = await api.post('/api/admin/credit', { email, symbol, amount: cryptoAmount, note });
       setMsg({ kind: 'ok', text: `Credited ${r.transaction.amount.toFixed(8)} ${r.transaction.symbol} ≈ $${r.transaction.usdValue.toFixed(2)}. Email queued.` });
       setAmount('');
@@ -175,7 +175,7 @@ function CreditForm({ users, onDone }) {
         <span className="text-xs text-white/55">Amount ({denom === 'usd' ? 'USD $' : symbol})</span>
         <input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" required className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-green/40"/>
         <span className="text-[11px] text-white/50 mt-1 block">
-          Live price: <strong>${livePrice ? livePrice.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '—'}</strong>
+          Live price: <strong>${livePrice ? livePrice.toLocaleString(undefined, { maximumFractionDigits: 4 }) : '-'}</strong>
           {cryptoAmount > 0 && (
             <>
               {' '}· Will credit <strong>{cryptoAmount.toLocaleString('en-US', { maximumFractionDigits: 8 })} {symbol}</strong>
@@ -240,7 +240,7 @@ function TokenForm({ users, onDone }) {
         <input value={expiresInHours} onChange={(e) => setExpiresInHours(e.target.value)} inputMode="decimal" placeholder="24" className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none"/>
       </label>
       {msg && <p className={`sm:col-span-2 text-xs px-3 py-2 rounded-lg border font-mono break-all ${msg.kind === 'ok' ? 'bg-neon-green/10 border-neon-green/30 text-neon-green' : 'bg-neon-red/10 border-neon-red/30 text-neon-red'}`}>{msg.text}</p>}
-      <button disabled={busy} className="sm:col-span-2 btn-gold justify-center disabled:opacity-60">
+      <button disabled={busy} className="sm:col-span-2 btn-primary justify-center disabled:opacity-60">
         {busy ? <><Loader2 className="h-4 w-4 animate-spin"/> Issuing…</> : 'Issue withdrawal token'}
       </button>
     </form>
@@ -260,7 +260,7 @@ function UsersList({ users }) {
             <tr key={u.id}>
               <td className="py-2.5">{u.email}</td>
               <td>{u.name}</td>
-              <td>{u.isAdmin ? <span className="chip bg-gold-500/15 text-gold-300">admin</span> : <span className="chip bg-white/5 text-white/70 border border-white/10">user</span>}</td>
+              <td>{u.isAdmin ? <span className="chip bg-neon-green/15 text-cyan">admin</span> : <span className="chip bg-white/5 text-white/70 border border-white/10">user</span>}</td>
               <td>{(u.accountStatus || 'active') === 'active' ? <span className="chip bg-neon-green/15 text-neon-green">active</span> : <span className="chip bg-neon-red/15 text-neon-red">disabled</span>}</td>
               <td className="text-white/55">{new Date(u.createdAt).toLocaleDateString()}</td>
               <td className="text-white/70 text-xs">{Object.entries(u.balances || {}).filter(([, v]) => v > 0).map(([k, v]) => `${k}: ${fmt(v)}`).join(' · ') || '-'}</td>
@@ -469,7 +469,7 @@ function AddressesPanel({ addresses, onDone }) {
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Cold storage A" className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none"/>
         </label>
         {msg && <p className={`sm:col-span-2 text-xs px-3 py-2 rounded-lg border ${msg.kind === 'ok' ? 'bg-neon-green/10 border-neon-green/30 text-neon-green' : 'bg-neon-red/10 border-neon-red/30 text-neon-red'}`}>{msg.text}</p>}
-        <button disabled={busy} className="sm:col-span-2 btn-gold justify-center disabled:opacity-60">
+        <button disabled={busy} className="sm:col-span-2 btn-primary justify-center disabled:opacity-60">
           {busy ? <><Loader2 className="h-4 w-4 animate-spin"/> Saving…</> : 'Publish deposit address'}
         </button>
       </form>
@@ -512,8 +512,8 @@ function TestimonialsPanel({ testimonials, onDone }) {
             <div className="flex items-center gap-2 text-xs">
               <strong className="text-white">{t.name}</strong>
               <span className="text-white/55">{t.role || 'Oakmont Digital Markets Group investor'}</span>
-              <span className={`chip ${t.status === 'approved' ? 'bg-neon-green/15 text-neon-green' : t.status === 'pending' ? 'bg-gold-500/15 text-gold-200' : 'bg-neon-red/15 text-neon-red'}`}>{t.status}</span>
-              <span className="text-gold-300">{'★'.repeat(t.rating || 5)}</span>
+              <span className={`chip ${t.status === 'approved' ? 'bg-neon-green/15 text-neon-green' : t.status === 'pending' ? 'bg-neon-green/15 text-cyan' : 'bg-neon-red/15 text-neon-red'}`}>{t.status}</span>
+              <span className="text-cyan">{'★'.repeat(t.rating || 5)}</span>
             </div>
             <p className="mt-1 text-sm text-white/80">{t.text}</p>
           </div>
@@ -657,7 +657,7 @@ function WithdrawLimitsForm({ users, onDone }) {
         <input list="adm-users-wl" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="alice@example.com" className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-green/40"/>
         <datalist id="adm-users-wl">{users.map((u) => <option key={u.id} value={u.email}/>)}</datalist>
         {existing && (
-          <p className="mt-1 text-[11px] text-gold-300">Active override: daily {existing.daily ?? '—'} · monthly {existing.monthly ?? '—'} · per-tx {existing.perTx ?? '—'}{existing.setBy ? ` · set by ${existing.setBy}` : ''}</p>
+          <p className="mt-1 text-[11px] text-cyan">Active override: daily {existing.daily ?? '-'} · monthly {existing.monthly ?? '-'} · per-tx {existing.perTx ?? '-'}{existing.setBy ? ` · set by ${existing.setBy}` : ''}</p>
         )}
       </label>
       <label className="block">
@@ -796,7 +796,7 @@ function ExportsPanel() {
   // the auth cookie is sent automatically.
   const Link = ({ kind, label }) => (
     <a href={`/api/admin/export?kind=${kind}`} className="glass-light p-3 flex items-center gap-3 hover:bg-white/10">
-      <Download className="h-4 w-4 text-gold-400"/>
+      <Download className="h-4 w-4 text-cyan"/>
       <div className="flex-1">
         <div className="text-sm font-medium">{label}</div>
         <div className="text-[11px] text-white/55">Download as CSV</div>
@@ -838,7 +838,7 @@ function KycQueuePanel() {
         ) : data.pending.map((s) => (
           <div key={s.id} className="glass p-3 mb-2 space-y-2">
             <div className="flex items-center flex-wrap gap-2 text-xs">
-              <span className="chip bg-gold-400/15 text-gold-300 border border-gold-400/30">Tier {s.requestedTier}</span>
+              <span className="chip bg-neon-green/15 text-cyan border border-neon-green/30">Tier {s.requestedTier}</span>
               <span className="text-white/85">{s.userEmail}</span>
               <span className="text-white/45 ml-auto">{new Date(s.createdAt).toLocaleString()}</span>
             </div>
@@ -904,7 +904,7 @@ function ResetBalancesForm({ users, onDone }) {
       <p className="sm:col-span-2 text-xs text-white/55">Zero every asset balance for a user. Records a single <code className="px-1 py-0.5 rounded bg-white/10">reset</code> transaction with the prior balances and appends an audit-log entry. Account, history, and metadata are preserved.</p>
       <label className="block sm:col-span-2">
         <span className="text-xs text-white/55">User email</span>
-        <input list="adm-users-rst" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="alice@example.com" className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-orange/40"/>
+        <input list="adm-users-rst" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="alice@example.com" className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-cyan/40"/>
         <datalist id="adm-users-rst">{users.map((u) => <option key={u.id} value={u.email}/>)}</datalist>
         {target && (
           <p className="mt-1 text-[11px] text-white/55">
@@ -919,7 +919,7 @@ function ResetBalancesForm({ users, onDone }) {
         <input value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none"/>
       </label>
       <label className="sm:col-span-2 text-xs text-white/60 inline-flex items-center gap-2">
-        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-neon-orange"/> Email the user a notification
+        <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} className="accent-cyan"/> Email the user a notification
       </label>
       {msg && <p className={`sm:col-span-2 text-xs px-3 py-2 rounded-lg border ${msg.kind === 'ok' ? 'bg-neon-green/10 border-neon-green/30 text-neon-green' : 'bg-neon-red/10 border-neon-red/30 text-neon-red'}`}>{msg.text}</p>}
       <button disabled={busy} className="sm:col-span-2 btn-primary justify-center disabled:opacity-60">
@@ -984,27 +984,40 @@ function DeleteUserForm({ users, onDone }) {
 
 const BROKERAGE_INTEGRATIONS = [
   ['prime', 'Oakmont Prime'],
-  ['crypto', 'Oakmont DMG Crypto Desk (Binance)'],
+  ['crypto', 'Oakmont Digital Markets Group Crypto Desk (Binance)'],
   ['multiAsset', 'Oakmont Multi-Asset Desk (Yahoo Finance)'],
 ];
 const BROKERAGE_CLASSES = ['stocks', 'etfs', 'indices', 'forex', 'commodities', 'futures'];
 
 function BrokerageSettingsPanel() {
   const [settings, setSettings] = useState(null);
+  const [live, setLive] = useState({ universe: {}, quotes: [], markets: [] });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const load = async (includeSettings = true) => {
       try {
-        const r = await api.get('/api/admin/brokerage-settings');
-        if (!cancelled) setSettings(r?.settings || null);
+        const [r, u, q, m] = await Promise.all([
+          includeSettings ? api.get('/api/admin/brokerage-settings') : Promise.resolve(null),
+          fetch('/api/brokerage/universe', { cache: 'no-store' }).then((res) => res.json()).catch(() => null),
+          fetch('/api/brokerage/quotes', { cache: 'no-store' }).then((res) => res.json()).catch(() => null),
+          fetch('/api/markets', { cache: 'no-store' }).then((res) => res.json()).catch(() => null),
+        ]);
+        if (!cancelled && includeSettings) setSettings(r?.settings || null);
+        if (!cancelled) setLive({
+          universe: u?.universe || {},
+          quotes: Array.isArray(q?.quotes) ? q.quotes : [],
+          markets: Array.isArray(m?.markets) ? m.markets : [],
+        });
       } catch (e) {
         if (!cancelled) setMsg({ kind: 'err', text: e.message });
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    load();
+    const id = setInterval(() => load(false), 30_000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   if (!settings) return <p className="text-xs text-white/55">Loading brokerage settings…</p>;
@@ -1045,8 +1058,50 @@ function BrokerageSettingsPanel() {
 
   return (
     <div className="space-y-4">
+      <div className="grid sm:grid-cols-4 gap-2">
+        {[
+          ['Brokerage quotes', live.quotes.length],
+          ['Crypto markets', live.markets.length],
+          ['Asset classes', BROKERAGE_CLASSES.filter((c) => settings.classes?.[c]).length],
+          ['Enabled integrations', BROKERAGE_INTEGRATIONS.filter(([id]) => settings.integrations?.[id]).length],
+        ].map(([label, value]) => (
+          <div key={label} className="glass-light p-3">
+            <p className="text-[10px] uppercase tracking-wide text-white/45">{label}</p>
+            <p className="mt-1 text-xl font-mono text-cyan">{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="glass-light p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <Briefcase className="h-4 w-4 text-cyan"/>
+          <p className="text-sm font-semibold">Live brokerage visibility</p>
+          <span className="ml-auto chip bg-neon-green/15 text-neon-green border border-neon-green/30 text-[10px]">● live feed</span>
+        </div>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {BROKERAGE_CLASSES.map((c) => {
+            const rows = live.universe?.[c] || [];
+            const symbols = new Set(rows.map((r) => r.symbol));
+            const liveCount = live.quotes.filter((q) => symbols.has(q.symbol)).length;
+            return (
+              <div key={c} className="rounded-lg bg-white/5 border border-white/10 p-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold capitalize">{c}</span>
+                  <span className={settings.classes?.[c] ? 'text-neon-green text-[10px]' : 'text-white/35 text-[10px]'}>
+                    {settings.classes?.[c] ? 'enabled' : 'hidden'}
+                  </span>
+                  <span className="ml-auto text-[10px] text-white/45">{liveCount}/{rows.length} live</span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {rows.slice(0, 5).map((row) => <span key={row.symbol} className="chip bg-white/5 border border-white/10 text-white/70 text-[10px]">{row.symbol}</span>)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <div>
         <p className="text-xs text-white/55 mb-2">Broker integrations</p>
+        <p className="text-[11px] text-white/45 mb-2">These toggles control live brokerage visibility for users. Crypto prices use Binance, and stocks, ETFs, indices, forex, commodities, futures, and options use Yahoo Finance live endpoints.</p>
         <div className="grid sm:grid-cols-3 gap-2">
           {BROKERAGE_INTEGRATIONS.map(([id, label]) => (
             <label key={id} className="glass-light p-3 flex items-center gap-2 cursor-pointer">
@@ -1054,7 +1109,7 @@ function BrokerageSettingsPanel() {
                 type="checkbox"
                 checked={!!settings.integrations?.[id]}
                 onChange={() => toggleIntegration(id)}
-                className="h-4 w-4 accent-gold-400"
+                className="h-4 w-4 accent-neon-green"
               />
               <span className="text-xs">{label}</span>
             </label>
@@ -1070,7 +1125,7 @@ function BrokerageSettingsPanel() {
                 type="checkbox"
                 checked={!!settings.classes?.[c]}
                 onChange={() => toggleClass(c)}
-                className="h-4 w-4 accent-gold-400"
+                className="h-4 w-4 accent-neon-green"
               />
               <span className="text-xs capitalize">{c}</span>
             </label>

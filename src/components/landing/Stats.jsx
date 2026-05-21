@@ -34,13 +34,13 @@ export function Stats() {
             label: 'Live Price Feed',
             value: liveReady ? 'Binance' : 'Connecting',
             icon: Users,
-            accent: 'text-gold-400',
+            accent: 'text-cyan',
         },
         {
             label: 'Tracked Public Assets',
             value: liveReady ? `${aggregate.count}` : 'Connecting',
             icon: Coins,
-            accent: 'text-neon-orange',
+            accent: 'text-cyan',
         },
         {
             label: 'Account Controls',

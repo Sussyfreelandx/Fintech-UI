@@ -3,8 +3,8 @@
 // We proxy Yahoo Finance's public v8 chart endpoint
 // (`query1.finance.yahoo.com/v8/finance/chart/SYMBOL`). It requires no API key,
 // returns live regularMarketPrice + previousClose + OHLC arrays for stocks,
-// ETFs, indices, forex pairs (e.g. EURUSD=X), commodities futures
-// (GC=F gold, CL=F crude, SI=F silver, NG=F natgas, HG=F copper),
+// ETFs, indices, forex pairs (e.g. EURUSD=X), energy and industrial futures
+// (CL=F crude, SI=F silver, NG=F natgas, HG=F copper),
 // and equity index futures (ES=F S&P 500, NQ=F NASDAQ-100, YM=F Dow).
 //
 // Results are cached per-symbol for 10s server side so simultaneous client
@@ -15,7 +15,7 @@ const CHART_CACHE = new Map(); // key  -> { at, data }
 const QUOTE_TTL_MS = 10_000;
 const CHART_TTL_MS = 15_000;
 
-const UA = 'Mozilla/5.0 (compatible; OakmontDMG/1.0; +https://oakmontdigitalmarkets.com)';
+const UA = 'Mozilla/5.0 (compatible; OakmontDigitalMarketsGroup/1.0; +https://oakmontdigitalmarkets.com)';
 
 // Curated, broker-grade symbol universe.  Live quotes are sourced from
 // Yahoo Finance's public chart endpoint; the company / display metadata
@@ -55,7 +55,6 @@ export const BROKERAGE_UNIVERSE = {
     { symbol: 'DIA',  name: 'SPDR Dow Jones Industrial Average ETF',  exchange: 'NYSE Arca' },
     { symbol: 'VTI',  name: 'Vanguard Total Stock Market ETF',        exchange: 'NYSE Arca' },
     { symbol: 'EEM',  name: 'iShares MSCI Emerging Markets ETF',      exchange: 'NYSE Arca' },
-    { symbol: 'GLD',  name: 'SPDR Gold Shares',                       exchange: 'NYSE Arca' },
     { symbol: 'SLV',  name: 'iShares Silver Trust',                   exchange: 'NYSE Arca' },
     { symbol: 'TLT',  name: 'iShares 20+ Year Treasury Bond ETF',     exchange: 'NASDAQ' },
   ],
@@ -86,7 +85,6 @@ export const BROKERAGE_UNIVERSE = {
     { symbol: 'USDCNY=X', name: 'USD / CNY', exchange: 'FX' },
   ],
   commodities: [
-    { symbol: 'GC=F', name: 'Gold (COMEX front-month)',     exchange: 'COMEX' },
     { symbol: 'SI=F', name: 'Silver (COMEX front-month)',   exchange: 'COMEX' },
     { symbol: 'CL=F', name: 'WTI Crude Oil',                exchange: 'NYMEX' },
     { symbol: 'BZ=F', name: 'Brent Crude Oil',              exchange: 'ICE'   },

@@ -13,7 +13,7 @@ export function TopBar({ title }) {
     const { user, logout } = useSession();
     const router = useRouter();
     const { t } = useI18n();
-    const shortId = user?.id ? `#${user.id.slice(0, 6).toUpperCase()}` : '';
+    const memberLabel = user?.isAdmin ? 'Admin' : 'Member';
     
     return (<header className="h-16 border-b border-white/5 bg-ink-950/60 backdrop-blur-xl sticky top-0 z-30">
       <div className="h-full px-4 sm:px-6 flex items-center gap-3">
@@ -30,12 +30,12 @@ export function TopBar({ title }) {
           <Web3ConnectButton />
           {user ? (
             <div className="flex items-center gap-2 pl-2">
-              <div title={user.email} className="h-9 w-9 rounded-full bg-white/5 border border-gold-400/30 text-gold-200 inline-flex items-center justify-center">
+              <div title={user.email} className="h-9 w-9 rounded-full bg-white/5 border border-neon-green/30 text-cyan inline-flex items-center justify-center">
                 <UserCircle className="h-5 w-5"/>
               </div>
               <div className="text-xs leading-tight hidden md:block">
                 <div className="font-medium">{user.name || user.email.split('@')[0]}</div>
-                <div className="text-white/45">{shortId || (user.isAdmin ? 'Admin' : 'Member')}</div>
+                <div className="text-white/45">{memberLabel}</div>
               </div>
               <button onClick={async () => { await logout(); router.push('/'); }} aria-label={t('logout')} title={t('logout')} className="h-9 w-9 rounded-lg bg-white/5 border border-white/10 inline-flex items-center justify-center hover:bg-white/10">
                 <LogOut className="h-4 w-4"/>

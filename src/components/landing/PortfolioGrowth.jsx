@@ -3,20 +3,22 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { DonutChart } from '@/components/ui/Charts';
 import { ArrowUpRight, TrendingUp } from 'lucide-react';
+import { useSession } from '@/lib/useSession';
 const allocation = [
     { label: 'Stocks', value: 28, color: '#22d3ee' },
-    { label: 'ETFs', value: 22, color: '#c9a24a' },
-    { label: 'Crypto', value: 20, color: '#f7931a' },
+    { label: 'ETFs', value: 22, color: '#06d6c4' },
+    { label: 'Crypto', value: 20, color: '#00ffa3' },
     { label: 'FX', value: 14, color: '#10b981' },
     { label: 'Futures', value: 10, color: '#8b5cf6' },
-    { label: 'Options', value: 6, color: '#ff8a00' },
+    { label: 'Options', value: 6, color: '#ffffff' },
 ];
 export function PortfolioGrowth() {
+    const { user, loading } = useSession();
     return (<section className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20">
       <div className="grid lg:grid-cols-5 gap-8 items-center">
         <div className="lg:col-span-3">
           <motion.h2 initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-3xl sm:text-4xl font-display">
-            Compound your <span className="text-gradient-gold">portfolio</span> with
+            Compound your <span className="text-gradient-neon">portfolio</span> with
             disciplined strategy.
           </motion.h2>
           <p className="mt-3 text-white/65 max-w-xl">
@@ -37,7 +39,7 @@ export function PortfolioGrowth() {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="lg:col-span-2 glass-strong p-6 flex flex-col items-center">
           <div className="w-full flex items-center justify-between">
             <p className="text-sm text-white/60">Brokerage asset-class coverage</p>
-            <span className="chip bg-gold-500/15 text-gold-400 border border-gold-500/30">
+            <span className="chip bg-neon-green/15 text-cyan border border-neon-green/30">
               <TrendingUp className="h-3 w-3"/> Live coverage
             </span>
           </div>
@@ -49,7 +51,7 @@ export function PortfolioGrowth() {
                 <span className="ml-auto text-white/90 font-medium">{a.value}%</span>
               </div>))}
           </div>
-          <Link href="/login?next=/investor" className="btn-outline mt-5 w-full justify-center text-sm">
+          <Link href={!loading && user ? '/dashboard/analytics' : '/login?next=/investor'} className="btn-outline mt-5 w-full justify-center text-sm">
             Open portfolio dashboard <ArrowUpRight className="h-4 w-4"/>
           </Link>
         </motion.div>
