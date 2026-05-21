@@ -30,20 +30,20 @@
   body {
     @apply bg-ink-950 text-white dark:bg-ink-950 dark:text-white;
     background-image:
-      radial-gradient(1200px 600px at 80% -10%, rgba(6, 214, 196, 0.13), transparent 60%),
-      radial-gradient(1000px 500px at -10% 10%, rgba(59, 130, 246, 0.10), transparent 60%),
-      radial-gradient(800px 400px at 50% 100%, rgba(0, 255, 163, 0.06), transparent 60%),
-      linear-gradient(135deg, #04131c 0%, #070d22 45%, #052236 100%);
+      radial-gradient(1200px 600px at 80% -10%, rgba(16, 185, 129, 0.08), transparent 60%),
+      radial-gradient(1000px 500px at -10% 10%, rgba(120, 113, 108, 0.08), transparent 60%),
+      radial-gradient(800px 400px at 50% 100%, rgba(63, 63, 70, 0.10), transparent 60%),
+      linear-gradient(135deg, #0b0b0c 0%, #141416 45%, #0a0a0b 100%);
     background-attachment: fixed;
   }
 
   html:not(.dark) body {
     @apply bg-navy-950 text-white;
     background-image:
-      radial-gradient(1200px 600px at 80% -10%, rgba(6, 214, 196, 0.18), transparent 60%),
-      radial-gradient(1000px 500px at -10% 10%, rgba(59, 130, 246, 0.14), transparent 60%),
-      radial-gradient(800px 400px at 50% 100%, rgba(0, 255, 163, 0.08), transparent 60%),
-      linear-gradient(135deg, #04131c 0%, #0b1530 45%, #05070d 100%);
+      radial-gradient(1200px 600px at 80% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+      radial-gradient(1000px 500px at -10% 10%, rgba(120, 113, 108, 0.10), transparent 60%),
+      radial-gradient(800px 400px at 50% 100%, rgba(63, 63, 70, 0.12), transparent 60%),
+      linear-gradient(135deg, #111113 0%, #1b1b1f 45%, #0a0a0b 100%);
     background-attachment: fixed;
   }
 
@@ -70,11 +70,11 @@
   }
   .btn { @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all duration-200 select-none; }
   .btn-primary {
-    @apply btn text-ink-950 shadow-glow hover:-translate-y-0.5;
-    background-image: linear-gradient(135deg, #00ffa3 0%, #06d6c4 55%, #38bdf8 100%);
+    @apply btn text-white shadow-glow hover:-translate-y-0.5;
+    background-image: linear-gradient(135deg, #059669 0%, #047857 55%, #065f46 100%);
   }
   .btn-ghost { @apply btn bg-white/5 border border-white/10 text-white hover:bg-white/10; }
-  .btn-outline { @apply btn border border-neon-green/60 text-neon-green hover:bg-neon-green/10; }
+  .btn-outline { @apply btn border border-emerald-600/60 text-emerald-400 hover:bg-emerald-600/10; }
   .chip { @apply inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full; }
 }
 
@@ -96,9 +96,7 @@
 
 /* Prevent iOS Safari from zooming when focusing form fields. The 16px
    threshold is the documented break-even on mobile WebKit. */
-@media (max-width: 640px) {
-  input, select, textarea { font-size: 16px; }
-}
+input, select, textarea { font-size: 16px; }
 
 /* Reserve space for the iPhone home-indicator under the fixed bottom
    navigation. The MobileBottomNav already extends behind the safe area
