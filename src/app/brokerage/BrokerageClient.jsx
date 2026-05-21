@@ -4,21 +4,13 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
   LineChart, BarChart3, RefreshCw, Search, TrendingUp, TrendingDown,
-  Activity, ArrowRight, X, Loader2, ChevronDown, ChevronUp,
+  Activity, ArrowRight, X, Loader2, ChevronDown, ChevronUp, Wallet,
 } from 'lucide-react';
 import { getCryptoLogo } from '@/lib/cryptoLogos';
 import { useSession } from '@/lib/useSession';
+import { BROKERAGE_TABS } from './brokerageTabs';
 
-const TABS = [
-  { id: 'stocks',      label: 'Stocks',       blurb: 'Live equities from US primary listings (NYSE, NASDAQ).' },
-  { id: 'etfs',        label: 'ETFs',         blurb: 'Diversified exchange-traded funds across indices, themes and fixed income.' },
-  { id: 'indices',     label: 'Indices',      blurb: 'Major global benchmarks: S&P 500, NASDAQ, Dow, FTSE, Nikkei and more.' },
-  { id: 'forex',       label: 'Forex',        blurb: 'Major and cross currency pairs (G10) with live spot pricing.' },
-  { id: 'commodities', label: 'Commodities',  blurb: 'Metals, energy and agriculturals: gold, silver, oil, gas, copper, wheat.' },
-  { id: 'futures',     label: 'Futures',      blurb: 'E-mini equity index, FX and Treasury futures from CME / CBOT.' },
-  { id: 'options',     label: 'Options',      blurb: 'Live call / put chains on listed equities and ETFs with strikes, IV and OI.' },
-  { id: 'crypto',      label: 'Crypto',       blurb: 'Live Binance spot pricing for the digital-asset desk.' },
-];
+const TABS = BROKERAGE_TABS;
 
 const RANGE_PRESETS = [
   { id: '1d',  interval: '5m',  label: '1D' },
@@ -130,7 +122,7 @@ function QuoteRow({ q, onOpen }) {
 }
 
 function QuoteDetail({ q, onClose }) {
-  const { user } = useSession();
+  const { user, loading } = useSession();
   const [rangeId, setRangeId] = useState('1mo');
   const range = RANGE_PRESETS.find((r) => r.id === rangeId) || RANGE_PRESETS[2];
   const [chart, setChart] = useState(null);
@@ -178,12 +170,16 @@ function QuoteDetail({ q, onClose }) {
         </div>
         <p className="mt-4 text-[11px] text-white/45">
           Live quote sourced from primary exchange feed.
-          {user
+          {loading
+            ? ' Checking your active session before showing trade actions.'
+            : user
             ? ' Your Oakmont DMG brokerage account is active — place an order from your trading dashboard.'
             : ' To place an order, open a verified Oakmont DMG brokerage account.'}
         </p>
         <div className="mt-3 flex gap-2">
-          {user ? (
+          {loading ? (
+            <span className="btn-ghost text-xs opacity-70"><Loader2 className="h-3.5 w-3.5 animate-spin"/> Checking session…</span>
+          ) : user ? (
             <Link href="/dashboard" className="btn-gold text-xs">Trade now in Dashboard</Link>
           ) : (
             <>
@@ -295,7 +291,7 @@ function CryptoBoard() {
                 className="h-8 w-8 rounded-full bg-white/5 border border-white/10 object-contain p-0.5"
                 onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'inline-flex'; }} />
             ) : null}
-            <span className={`h-8 w-8 rounded-full ${logo ? 'hidden' : 'inline-flex'} items-center justify-center text-[11px] font-bold text-ink-950`} style={{ background: r.color || '#888' }}>{r.symbol.slice(0,1)}</span>
+            <span className={`h-8 w-8 rounded-full ${logo ? 'hidden' : 'inline-flex'} items-center justify-center bg-white/5 border border-white/10`} style={{ background: r.color || undefined }}><Wallet className="h-3.5 w-3.5 text-white/75"/></span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">{r.symbol}</p>
               <p className="text-[11px] text-white/55 truncate">{r.name}</p>
@@ -392,13 +388,24 @@ function OptionsBoard() {
   );
 }
 
-export default function BrokerageClient() {
-  const { user } = useSession();
-  const [tab, setTab] = useState('stocks');
+export default function BrokerageClient({ initialTab = 'stocks' }) {
+  const { user, loading } = useSession();
+  const [tab, setTab] = useState(TABS.some((t) => t.id === initialTab) ? initialTab : 'stocks');
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get('tab');
-    if (requestedTab && TABS.some((t) => t.id === requestedTab)) setTab(requestedTab);
-  }, []);
+    if (requestedTab && TABS.some((t) => t.id === requestedTab)) {
+      setTab(requestedTab);
+      return;
+    }
+    if (TABS.some((t) => t.id === initialTab)) setTab(initialTab);
+  }, [initialTab]);
+  const selectTab = (id) => {
+    setTab(id);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/brokerage/${id}`);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
   const active = TABS.find((t) => t.id === tab) || TABS[0];
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 lg:py-14 space-y-6">
@@ -413,9 +420,9 @@ export default function BrokerageClient() {
       </motion.div>
       <div className="flex flex-wrap gap-1.5">
         {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)} className={`px-3 py-1.5 rounded-full text-xs sm:text-sm transition ${tab === t.id ? 'bg-gold-400/20 text-gold-300 border border-gold-400/40' : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'}`}>
+          <Link key={t.id} href={`/brokerage/${t.id}`} onClick={(e) => { e.preventDefault(); selectTab(t.id); }} className={`px-3 py-1.5 rounded-full text-xs sm:text-sm transition ${tab === t.id ? 'bg-gold-400/20 text-gold-300 border border-gold-400/40' : 'bg-white/5 border border-white/10 text-white/70 hover:bg-white/10'}`}>
             {t.label}
-          </button>
+          </Link>
         ))}
       </div>
       <p className="text-xs text-white/55">{active.blurb}</p>
@@ -470,7 +477,9 @@ export default function BrokerageClient() {
         </p>
       </section>
       <div className="text-center pt-2">
-        {user ? (
+        {loading ? (
+          <span className="btn-ghost opacity-70"><Loader2 className="h-4 w-4 animate-spin"/> Checking session…</span>
+        ) : user ? (
           <Link href="/dashboard" className="btn-gold">Trade now in your Dashboard <ArrowRight className="h-4 w-4"/></Link>
         ) : (
           <Link href="/signup" className="btn-gold">Open a Brokerage Account <ArrowRight className="h-4 w-4"/></Link>
