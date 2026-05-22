@@ -1,9 +1,10 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { TrendingUp, Wallet, ListOrdered, History, BarChart3, Bot, Bell, Shield, Settings, Briefcase } from 'lucide-react';
+import { TrendingUp, Wallet, ListOrdered, History, BarChart3, Bot, Bell, ShieldCheck, Settings, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/components/I18nProvider';
+import { useSession } from '@/lib/useSession';
 
 const items = [
     { href: '/brokerage', label: 'brokerage', icon: Briefcase, fallback: 'Brokerage' },
@@ -14,22 +15,25 @@ const items = [
     { href: '/dashboard/analytics', label: 'analytics', icon: BarChart3 },
     { href: '/dashboard/analytics', label: 'aiBot', icon: Bot },
     { href: '/dashboard/security', label: 'alerts', icon: Bell },
-    { href: '/dashboard/security', label: 'security', icon: Shield },
+    { href: '/dashboard/security', label: 'security', icon: ShieldCheck },
     { href: '/dashboard/security', label: 'settings', icon: Settings },
 ];
 
 export function MobileBottomNav() {
     const pathname = usePathname();
     const { t } = useI18n();
+    const { user, loading } = useSession();
     
-    return (<nav className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-ink-950/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
-      <ul className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory">
+    if (loading || !user) return null;
+    
+    return (<nav aria-label="Authenticated mobile navigation" className="lg:hidden fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-ink-950/90 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
+      <ul className="flex overflow-x-auto no-scrollbar snap-x snap-mandatory px-1">
         {items.map((it) => {
             const Icon = it.icon;
-            const active = pathname === it.href;
+            const active = pathname === it.href || (it.href !== '/brokerage' && pathname?.startsWith(`${it.href}/`));
             const label = it.fallback ? (t(it.label) === it.label ? it.fallback : t(it.label)) : t(it.label);
-            return (<li key={it.href} className="snap-start">
-              <Link href={it.href} className={cn('flex flex-col items-center justify-center gap-1 py-2.5 px-4 text-[11px] min-w-[72px]', active ? 'text-accent-success' : 'text-white/60 hover:text-white')}>
+            return (<li key={it.label} className="snap-start">
+              <Link href={it.href} className={cn('flex flex-col items-center justify-center gap-1 py-2 px-3 text-[10px] sm:text-[11px] min-w-[68px] rounded-xl transition-all duration-300 ease-out', active ? 'text-accent-success bg-accent-success/10' : 'text-white/60 hover:text-white hover:bg-white/5')}>
                 <Icon className="h-5 w-5"/>
                 <span>{label}</span>
               </Link>

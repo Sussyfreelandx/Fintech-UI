@@ -11,19 +11,32 @@ export function Navbar() {
     const [open, setOpen] = useState(false);
     const { user, loading } = useSession();
     const authed = !!user && !loading;
-    const nav = [
-        { href: '/brokerage', label: 'Brokerage' },
+    const publicNav = [
         { href: '/#markets', label: 'Markets' },
-        { href: authed ? '/dashboard/trade' : '/login?next=/dashboard/trade', label: 'Trade' },
-        { href: authed ? '/investor' : '/login?next=/investor', label: 'Investor Portal' },
+        { href: '/markets/live', label: 'Live Markets' },
+        { href: '/markets/signals', label: 'Signals' },
         { href: '/insights', label: 'Insights' },
-        { href: authed ? (user?.isAdmin ? '/admin' : '/dashboard') : '/login?next=/admin', label: 'Admin' },
+        { href: '/about', label: 'About' },
     ];
+    const authedNav = authed
+        ? [
+            { href: '/brokerage', label: 'Brokerage' },
+            { href: '/dashboard/trade', label: 'Trade' },
+            { href: '/dashboard/wallet', label: 'Wallet' },
+            { href: '/dashboard/positions', label: 'Positions' },
+            { href: '/dashboard/history', label: 'History' },
+            { href: '/dashboard/analytics', label: 'Analytics' },
+            { href: '/dashboard/security', label: 'Security' },
+            { href: '/investor', label: 'Investor Portal' },
+            ...(user?.isAdmin ? [{ href: '/admin', label: 'Admin' }] : []),
+        ]
+        : [];
+    const nav = [...publicNav, ...authedNav];
     return (<header className="sticky top-0 z-40 backdrop-blur-xl bg-ink-950/60 border-b border-white/5">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <BrandLogo compact textClassName="text-[clamp(1.05rem,2.6vw,1.5rem)]" markClassName="h-11 w-11 sm:h-12 sm:w-12" />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+        <BrandLogo compact textClassName="text-[clamp(1.05rem,2.6vw,1.45rem)]" markClassName="h-10 w-10 sm:h-11 sm:w-11" />
         <nav className="hidden lg:flex items-center gap-1">
-          {nav.map((n) => (<Link key={n.href} href={n.href} className="px-3 py-2 text-sm text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition">
+          {nav.map((n) => (<Link key={n.href} href={n.href} className="px-3 py-2 text-sm text-white/70 hover:text-white rounded-lg hover:bg-white/5 transition-all duration-300 ease-out hover:-translate-y-0.5">
               {n.label}
             </Link>))}
         </nav>
@@ -33,24 +46,36 @@ export function Navbar() {
           {loading ? (
             <span className="btn-ghost text-sm opacity-70">Checking session</span>
           ) : user ? (
-            <Link href="/dashboard" className="btn-outline text-sm border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Dashboard</Link>
+            <Link href="/dashboard" className="btn-primary text-sm">Dashboard</Link>
           ) : (
             <>
               <Link href="/login" className="btn-ghost text-sm">Sign in</Link>
-              <Link href="/signup" className="btn-outline text-sm border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Create Account</Link>
+              <Link href="/signup" className="btn-primary text-sm">Create Account</Link>
             </>
           )}
         </div>
-        <button onClick={() => setOpen(!open)} className="lg:hidden p-2 rounded-lg bg-white/5 border border-white/10" aria-label="Toggle menu">
+        <button onClick={() => setOpen(!open)} className="lg:hidden p-2 rounded-lg bg-white/5 border border-white/10 transition-all duration-300 ease-out active:scale-95" aria-label="Toggle menu">
           {open ? <X className="h-5 w-5"/> : <Menu className="h-5 w-5"/>}
         </button>
       </div>
       <AnimatePresence>
-        {open && (<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="lg:hidden overflow-hidden border-t border-white/5">
-            <div className="px-4 py-4 space-y-2 bg-ink-950/90 backdrop-blur-xl">
-              {nav.map((n) => (<Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="block px-3 py-2 rounded-lg text-white/80 hover:bg-white/5">
-                  {n.label}
-                </Link>))}
+        {open && (<motion.div initial={{ height: 0, opacity: 0, y: -8 }} animate={{ height: 'auto', opacity: 1, y: 0 }} exit={{ height: 0, opacity: 0, y: -8 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="lg:hidden overflow-hidden border-t border-white/5">
+            <div className="px-4 py-4 space-y-4 bg-ink-950/90 backdrop-blur-xl">
+              <div className="space-y-2">
+                {publicNav.map((n) => (<Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="block px-3 py-2 rounded-lg text-white/80 hover:bg-white/5 transition-all duration-300 ease-out hover:translate-x-1">
+                    {n.label}
+                  </Link>))}
+              </div>
+              {authedNav.length > 0 && (
+                <div className="border-t border-white/5 pt-3">
+                  <p className="px-3 pb-2 text-[11px] uppercase tracking-[0.2em] text-white/35">Account</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {authedNav.map((n) => (<Link key={n.href} href={n.href} onClick={() => setOpen(false)} className="block px-3 py-2 rounded-lg text-sm text-white/80 hover:bg-white/5 transition-all duration-300 ease-out hover:-translate-y-0.5">
+                        {n.label}
+                      </Link>))}
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-2 pt-2">
                 <LanguageSelector />
                 <ThemeToggle />
@@ -59,11 +84,11 @@ export function Navbar() {
                 {loading ? (
                   <span className="btn-ghost flex-1 text-sm opacity-70">Checking session</span>
                 ) : user ? (
-                  <Link href="/dashboard" onClick={() => setOpen(false)} className="btn-outline flex-1 text-sm border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Dashboard</Link>
+                  <Link href="/dashboard" onClick={() => setOpen(false)} className="btn-primary flex-1 text-sm">Dashboard</Link>
                 ) : (
                   <>
                     <Link href="/login" onClick={() => setOpen(false)} className="btn-ghost flex-1 text-sm">Sign in</Link>
-                    <Link href="/signup" onClick={() => setOpen(false)} className="btn-outline flex-1 text-sm border-blue-500/50 text-blue-400 hover:bg-blue-500/10">Create Account</Link>
+                    <Link href="/signup" onClick={() => setOpen(false)} className="btn-primary flex-1 text-sm">Create Account</Link>
                   </>
                 )}
               </div>
