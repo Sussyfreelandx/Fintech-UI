@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { TrendingUp, Loader2 } from 'lucide-react';
 import { api, useSession } from '@/lib/useSession';
@@ -11,13 +11,17 @@ export default function BrokeragePositionsPanel() {
   const [confirmKey, setConfirmKey] = useState(null);
   const [busyKey, setBusyKey] = useState(null);
   const [error, setError] = useState(null);
+  const [loadError, setLoadError] = useState(null);
   const [liveQuotes, setLiveQuotes] = useState({});
 
   const load = useCallback(async () => {
     try {
       const r = await api.get('/api/brokerage/positions');
       setPositions(Array.isArray(r?.positions) ? r.positions : []);
-    } catch (_) {} finally { setLoaded(true); }
+      setLoadError(null);
+    } catch (_) {
+      setLoadError('Brokerage positions are temporarily unavailable.');
+    } finally { setLoaded(true); }
   }, []);
 
   const fetchLive = useCallback(async (pos) => {
@@ -45,9 +49,45 @@ export default function BrokeragePositionsPanel() {
     return () => clearInterval(id);
   }, [positions, fetchLive]);
 
+  const displayRows = useMemo(() => positions.map((p) => {
+    const q = liveQuotes[p.symbol];
+    const dayPct = q?.pct ?? null;
+    const isUp = dayPct !== null && dayPct >= 0;
+    const qty = Number(p.qty) || 0;
+    const avgPrice = Number(p.avgPrice) || 0;
+    const livePrice = Number(q?.price ?? p.livePrice ?? 0);
+    const invested = Number(p.usdInvested) || (qty * avgPrice) || 0;
+    const marketValue = qty * livePrice;
+    const pnlUsd = q ? (marketValue - invested) : Number(p.pnlUsd) || 0;
+    const pnlPct = q
+      ? (invested > 0 ? ((marketValue - invested) / invested) * 100 : 0)
+      : Number(p.pnlPct) || 0;
+    return { p, q, dayPct, isUp, qty, avgPrice, livePrice, marketValue, pnlUsd, pnlPct };
+  }), [liveQuotes, positions]);
+
   if (!user) return null;
-  if (!loaded) return null;
-  if (positions.length === 0) return null;
+  if (!loaded) {
+    return (
+      <section className="glass-strong p-6">
+        <p className="text-sm text-white/55 inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin"/> Loading brokerage positions…</p>
+      </section>
+    );
+  }
+  if (loadError && positions.length === 0) {
+    return (
+      <section className="glass-strong p-6">
+        <p className="text-sm text-white/55">{loadError}</p>
+      </section>
+    );
+  }
+  if (positions.length === 0) {
+    return (
+      <section className="glass-strong p-6">
+        <h3 className="font-display text-xl tracking-tight">Brokerage positions</h3>
+        <p className="mt-2 text-sm text-white/55">No live brokerage positions yet. Invest from the Oakmont brokerage hub to populate this panel.</p>
+      </section>
+    );
+  }
 
   const liquidate = async (p) => {
     setBusyKey(p.key); setError(null);
@@ -70,7 +110,7 @@ export default function BrokeragePositionsPanel() {
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20" />
       
       <div className="flex items-center gap-3 mb-4">
-        <TrendingUp className="h-5 w-5 text-blue-400"/>
+        <TrendingUp className="h-5 w-5 text-slate-400"/>
         <h3 className="font-display text-xl tracking-tight">Brokerage positions</h3>
         <motion.span 
           initial={{ opacity: 0, scale: 0.9 }}
@@ -83,13 +123,13 @@ export default function BrokeragePositionsPanel() {
         </motion.span>
       </div>
       
-      {error && (
+      {(error || loadError) && (
         <motion.p 
           initial={{ opacity: 0, x: -8 }}
           animate={{ opacity: 1, x: 0 }}
           className="text-xs text-accent-error bg-accent-error/10 border border-accent-error/30 rounded-xl px-4 py-2.5 mb-4"
         >
-          {error}
+          {error || loadError}
         </motion.p>
       )}
       
@@ -110,19 +150,7 @@ export default function BrokeragePositionsPanel() {
             </tr>
           </thead>
           <tbody>
-            {positions.map((p, idx) => {
-              const q = liveQuotes[p.symbol];
-              const dayPct = q?.pct ?? null;
-              const isUp = dayPct !== null && dayPct >= 0;
-              const qty = Number(p.qty) || 0;
-              const avgPrice = Number(p.avgPrice) || 0;
-              const livePrice = Number(q?.price ?? p.livePrice ?? 0);
-              const invested = Number(p.usdInvested) || (qty * avgPrice) || 0;
-              const marketValue = qty * livePrice;
-              const pnlUsd = q ? (marketValue - invested) : Number(p.pnlUsd) || 0;
-              const pnlPct = q
-                ? (invested > 0 ? ((marketValue - invested) / invested) * 100 : 0)
-                : Number(p.pnlPct) || 0;
+            {displayRows.map(({ p, q, dayPct, isUp, qty, avgPrice, livePrice, marketValue, pnlUsd, pnlPct }, idx) => {
               return (
               <motion.tr 
                 key={p.key} 

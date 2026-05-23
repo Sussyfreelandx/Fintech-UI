@@ -1,11 +1,12 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Copy, Wallet, Check, Search, MessageSquare, Star, Loader2, ShieldAlert, ShieldCheck, AlertTriangle, Bell, Lock, X as BellClose, ArrowRightLeft, Rocket, LifeBuoy, Send, ChevronDown, ChevronUp } from 'lucide-react';
 import QRCode from 'qrcode';
 import { api, useSession } from '@/lib/useSession';
 import { useNotifications } from '@/components/Notifications';
 import { cryptoLogoStyle } from '@/lib/cryptoLogos';
+import { useAccessibleDialog } from '@/lib/useAccessibleDialog';
 
 // Memo / destination-tag bearing chains. Funds sent without the memo are
 // generally not recoverable on a shared exchange wallet, so we warn the
@@ -66,7 +67,7 @@ export function DepositAddressPanel() {
   return (
     <section className="glass-strong p-5 max-w-3xl">
       <div className="flex items-center gap-2 mb-3">
-        <Wallet className="h-4 w-4 text-blue-400"/>
+        <Wallet className="h-4 w-4 text-slate-400"/>
         <h3 className="font-display text-lg">Deposit crypto</h3>
         <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30">● live</span>
       </div>
@@ -93,7 +94,7 @@ export function DepositAddressPanel() {
                       ) : (
                         <span className="block h-4 w-full rounded bg-white/5 animate-pulse" aria-hidden="true"/>
                       )}
-                      {a.memo && <div className="text-[11px] text-blue-400">Memo / tag: <code className="font-mono">{a.memo}</code></div>}
+                      {a.memo && <div className="text-[11px] text-slate-300">Memo / tag: <code className="font-mono">{a.memo}</code></div>}
                       {memoRequired && (
                         <div className="flex gap-1.5 items-start text-[11px] text-accent-error bg-accent-error/10 border border-accent-error/30 rounded px-2 py-1.5">
                           <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0"/>
@@ -121,14 +122,18 @@ export function MarketsPanel({ onInvest }) {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState('');
   const [watchlist, setWatchlist] = useState([]); // base symbols
+  const [loading, setLoading] = useState(true);
+  const [marketError, setMarketError] = useState(null);
+  const [watchlistError, setWatchlistError] = useState(null);
+  const hasRowsRef = useRef(false);
   // Column sort. Click a header to toggle asc/desc; clicking a different
   // column resets to desc (the more useful direction for price/volume).
   const [sortBy, setSortBy] = useState(null); // 'price' | 'pct' | 'volume' | null
   const [sortDir, setSortDir] = useState('desc');
-  const requestSort = (col) => {
+  const requestSort = useCallback((col) => {
     if (sortBy === col) setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
     else { setSortBy(col); setSortDir('desc'); }
-  };
+  }, [sortBy]);
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -137,8 +142,22 @@ export function MarketsPanel({ onInvest }) {
         // Avoid clobbering a populated table with an empty response -
         // Binance occasionally returns [] under rate-limit and we don't
         // want the UI to flash empty.
-        if (mounted && Array.isArray(r.markets) && r.markets.length) setRows(r.markets);
-      } catch (_) {}
+        if (!mounted) return;
+        if (Array.isArray(r.markets) && r.markets.length) {
+          setRows(r.markets);
+          hasRowsRef.current = true;
+          setMarketError(null);
+        } else if (!hasRowsRef.current) {
+          setRows([]);
+          setMarketError('Live market prices are temporarily unavailable.');
+        } else {
+          setMarketError('Showing the last Oakmont market snapshot while the feed reconnects.');
+        }
+      } catch (_) {
+        if (mounted) setMarketError(hasRowsRef.current ? 'Showing the last Oakmont market snapshot while the feed reconnects.' : 'Live market prices are temporarily unavailable.');
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
     load();
     const id = setInterval(load, 15000);
@@ -150,12 +169,17 @@ export function MarketsPanel({ onInvest }) {
     (async () => {
       try {
         const r = await api.get('/api/watchlist');
-        if (!cancelled) setWatchlist(Array.isArray(r.symbols) ? r.symbols : []);
-      } catch (_) { /* tolerate */ }
+        if (!cancelled) {
+          setWatchlist(Array.isArray(r.symbols) ? r.symbols : []);
+          setWatchlistError(null);
+        }
+      } catch (_) {
+        if (!cancelled) setWatchlistError('Saved watchlist is temporarily unavailable.');
+      }
     })();
     return () => { cancelled = true; };
   }, [user]);
-  const toggleFavourite = async (symbol) => {
+  const toggleFavourite = useCallback(async (symbol) => {
     if (!user) return;
     const had = watchlist.includes(symbol);
     // Optimistic update.
@@ -167,23 +191,24 @@ export function MarketsPanel({ onInvest }) {
       // Revert on failure.
       setWatchlist((prev) => had ? [...prev, symbol] : prev.filter((s) => s !== symbol));
     }
-  };
-  const authHref = (symbol) => `/login?next=/dashboard&asset=${encodeURIComponent(symbol)}`;
-  const handleInvest = (symbol) => {
+  }, [user, watchlist]);
+  const watchlistSet = useMemo(() => new Set(watchlist), [watchlist]);
+  const authHref = useCallback((symbol) => `/login?next=/dashboard&asset=${encodeURIComponent(symbol)}`, []);
+  const handleInvest = useCallback((symbol) => {
     if (!user) {
       window.location.href = authHref(symbol);
       return;
     }
     onInvest && onInvest(symbol);
-  };
-  const filtered = rows.filter((r) => {
+  }, [authHref, onInvest, user]);
+  const filtered = useMemo(() => rows.filter((r) => {
     if (!q) return true;
     const s = q.toLowerCase();
     return r.symbol.toLowerCase().includes(s) || r.name.toLowerCase().includes(s);
-  });
+  }), [q, rows]);
   // Apply column sort if one is active. Missing values sort to the end so
   // a freshly-rendered table with one slow row doesn't claim first place.
-  const sorted = sortBy
+  const sorted = useMemo(() => (sortBy
     ? filtered.slice().sort((a, b) => {
       const av = a[sortBy]; const bv = b[sortBy];
       const aMissing = av == null || !isFinite(av);
@@ -193,11 +218,12 @@ export function MarketsPanel({ onInvest }) {
       if (bMissing) return -1;
       return sortDir === 'asc' ? av - bv : bv - av;
     })
-    : filtered;
+    : filtered), [filtered, sortBy, sortDir]);
   const sortIndicator = (col) => {
     if (sortBy !== col) return null;
     return <span aria-hidden className="ml-1 text-white/60">{sortDir === 'asc' ? '▲' : '▼'}</span>;
   };
+  const colSpan = user ? 8 : 7;
   const sortableHeader = (col, label, extraClass = '') => (
     <th
       className={`py-2 font-medium ${extraClass}`}
@@ -219,9 +245,16 @@ export function MarketsPanel({ onInvest }) {
         <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30">● live</span>
         <div className="ml-auto flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5">
           <Search className="h-3.5 w-3.5 text-white/50"/>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search asset…" className="bg-transparent outline-none text-sm w-32"/>
+          <label htmlFor="markets-search" className="sr-only">Search crypto markets</label>
+          <input id="markets-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search asset…" className="bg-transparent outline-none text-sm w-32"/>
         </div>
       </div>
+      {(marketError || watchlistError) && (
+        <div className="mb-3 space-y-2" aria-live="polite">
+          {marketError && <p className="rounded-lg border border-accent-warning/30 bg-accent-warning/10 px-3 py-2 text-xs text-accent-warning">{marketError}</p>}
+          {watchlistError && user && <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/65">{watchlistError}</p>}
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="text-xs text-white/50 text-left">
@@ -237,8 +270,19 @@ export function MarketsPanel({ onInvest }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
+            {!sorted.length && (
+              <tr>
+                <td colSpan={colSpan} className="py-6 text-center text-white/45">
+                  {q
+                    ? 'No markets match this search.'
+                    : loading
+                      ? 'Loading live market prices…'
+                      : marketError || 'No live market rows are available yet.'}
+                </td>
+              </tr>
+            )}
             {sorted.map((r) => {
-              const fav = watchlist.includes(r.symbol);
+              const fav = watchlistSet.has(r.symbol);
               return (
               <tr key={r.symbol}>
                 {user && (
@@ -313,9 +357,9 @@ export function SandboxOnRampPanel({ onClaimed }) {
   return (
     <section className="glass-strong p-5">
       <div className="flex items-center gap-2 mb-2">
-        <Wallet className="h-4 w-4 text-blue-400"/>
+        <Wallet className="h-4 w-4 text-slate-400"/>
         <h3 className="font-display text-lg">Sandbox starter funds</h3>
-        <span className="chip bg-accent-success/15 text-blue-400 border border-accent-success/30">test only</span>
+        <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30">test only</span>
       </div>
       <p className="text-xs text-white/55 mb-3">
         This deployment has the sandbox on-ramp enabled. Claim {info.amount} USDT of practice funds to try the invest flow.
@@ -356,19 +400,19 @@ export function TestimonialComposer() {
   return (
     <section className="glass-strong p-5">
       <div className="flex items-center gap-2 mb-3">
-        <MessageSquare className="h-4 w-4 text-blue-400"/>
-        <h3 className="font-display text-lg">Share your Oakmont Digital Markets Group experience</h3>
+        <MessageSquare className="h-4 w-4 text-slate-400"/>
+        <h3 className="font-display text-lg">Share your Oakmont Digital Capital Group experience</h3>
       </div>
-      <p className="text-xs text-white/55 mb-3">Eligible after your first investment or deposit clears. Your testimonial may appear publicly on the Oakmont Digital Markets Group landing page.</p>
+      <p className="text-xs text-white/55 mb-3">Eligible after your first investment or deposit clears. Your testimonial may appear publicly on the Oakmont Digital Capital Group landing page.</p>
       <form onSubmit={submit} className="space-y-2">
-        <textarea required minLength={20} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} placeholder="What stands out about trading and investing on Oakmont Digital Markets Group?" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-accent-success/40 min-h-[90px]"/>
+        <textarea required minLength={20} maxLength={600} value={text} onChange={(e) => setText(e.target.value)} placeholder="What stands out about trading and investing on Oakmont Digital Capital Group?" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-accent-success/40 min-h-[90px]"/>
         <div className="flex gap-2 flex-wrap">
           <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Your role (optional) - e.g. Portfolio Manager" className="flex-1 min-w-[200px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none"/>
           <input type="url" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="Public photo URL (optional, https only)" className="flex-1 min-w-[240px] bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none"/>
           <div className="inline-flex items-center gap-1 bg-white/5 border border-white/10 rounded-lg px-2">
             {[1, 2, 3, 4, 5].map((n) => (
               <button type="button" key={n} onClick={() => setRating(n)} aria-label={`${n} stars`}>
-                <Star className={`h-4 w-4 ${n <= rating ? 'text-blue-400 fill-cyan' : 'text-white/30'}`}/>
+                <Star className={`h-4 w-4 ${n <= rating ? 'text-accent-success fill-accent-success' : 'text-white/30'}`}/>
               </button>
             ))}
           </div>
@@ -412,7 +456,7 @@ export function EmailVerifyBanner({ user }) {
   };
   return (
     <section className="glass border border-accent-success/30 bg-accent-success/5 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-      <Lock className="h-5 w-5 text-blue-400 shrink-0"/>
+      <Lock className="h-5 w-5 text-slate-400 shrink-0"/>
       <div className="flex-1">
         <p className="text-sm font-medium">Verify your email to unlock withdrawals.</p>
         <p className="text-xs text-white/60">We sent the code to {user.email}. Withdrawals are limited until your inbox is confirmed.</p>
@@ -450,12 +494,17 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unread, setUnread] = useState(0);
+  const [loadError, setLoadError] = useState(null);
+  const { dialogRef, closeButtonRef, titleId, dialogProps } = useAccessibleDialog({ open, onClose: () => setOpen(false), modal: false });
   const reload = async () => {
     try {
       const r = await api.get('/api/notifications');
       setItems(r.items || []);
       setUnread(r.unread || 0);
-    } catch (_) {}
+      setLoadError(null);
+    } catch (_) {
+      setLoadError('Notifications are temporarily unavailable.');
+    }
   };
   useEffect(() => {
     reload();
@@ -475,6 +524,7 @@ export function NotificationBell() {
         className="relative h-9 w-9 rounded-lg bg-white/5 border border-white/10 inline-flex items-center justify-center hover:bg-white/10"
         aria-label={`Notifications${unread ? ` - ${unread} unread` : ''}`}
         aria-expanded={open}
+        aria-controls="notifications-panel"
       >
         <Bell className="h-4 w-4"/>
         {unread > 0 && (
@@ -484,19 +534,21 @@ export function NotificationBell() {
         )}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto glass-strong border border-white/10 rounded-xl shadow-glass z-40" role="dialog" aria-label="Notifications">
+        <div id="notifications-panel" ref={dialogRef} {...dialogProps} className="absolute right-0 mt-2 w-80 max-h-96 overflow-y-auto glass-strong border border-white/10 rounded-xl shadow-glass z-40">
           <div className="flex items-center justify-between p-3 border-b border-white/10">
-            <span className="text-sm font-display">Notifications</span>
+            <span id={titleId} className="text-sm font-display">Notifications</span>
             <div className="flex items-center gap-1">
               {unread > 0 && (
                 <button onClick={markAll} className="text-[11px] text-white/65 hover:text-white px-2 py-1 rounded hover:bg-white/5">Mark all read</button>
               )}
-              <button onClick={() => setOpen(false)} aria-label="Close" className="h-7 w-7 rounded-md hover:bg-white/10 inline-flex items-center justify-center">
+              <button ref={closeButtonRef} onClick={() => setOpen(false)} aria-label="Close notifications panel" className="h-7 w-7 rounded-md hover:bg-white/10 inline-flex items-center justify-center">
                 <BellClose className="h-3.5 w-3.5"/>
               </button>
             </div>
           </div>
-          {items.length === 0 ? (
+          {loadError ? (
+            <p className="text-xs text-white/55 p-4">{loadError}</p>
+          ) : items.length === 0 ? (
             <p className="text-xs text-white/55 p-4">You&apos;re all caught up.</p>
           ) : (
             <ul className="divide-y divide-white/5">
@@ -586,7 +638,7 @@ export function OpenOrdersPanel({ refreshKey, onPlaced }) {
                   <tr key={o.id}>
                     <td className="py-2.5 text-white/55 text-xs">{new Date(o.createdAt).toLocaleString()}</td>
                     <td>
-                      <span className={`chip border ${o.side === 'buy' ? 'bg-accent-success/15 text-accent-success border-accent-success/30' : 'bg-blue-500/15 text-blue-400 border-blue-500/30'}`}>{o.side}</span>
+                      <span className={`chip border ${o.side === 'buy' ? 'bg-accent-success/15 text-accent-success border-accent-success/30' : 'bg-accent-error/15 text-accent-error border-accent-error/30'}`}>{o.side}</span>
                     </td>
                     <td className="text-white/80">{o.kind}</td>
                     <td>{o.symbol}</td>
@@ -639,6 +691,7 @@ function PlaceOrderModal({ open, onClose, onPlaced }) {
   const [qty, setQty] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const { dialogRef, closeButtonRef, titleId, dialogProps } = useAccessibleDialog({ open, onClose });
   useEffect(() => { if (open) { setError(null); } }, [open]);
   if (!open) return null;
   const submit = async (e) => {
@@ -662,20 +715,20 @@ function PlaceOrderModal({ open, onClose, onPlaced }) {
   })();
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 bg-ink-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div onClick={(e) => e.stopPropagation()} className="glass-strong w-full max-w-md p-6 relative">
+      <div ref={dialogRef} {...dialogProps} onClick={(e) => e.stopPropagation()} className="glass-strong w-full max-w-md p-6 relative">
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-lg font-display flex-1">Place limit / stop order</h3>
-          <button onClick={onClose} aria-label="Close" className="h-8 w-8 rounded-lg hover:bg-white/10 inline-flex items-center justify-center"><BellClose className="h-4 w-4"/></button>
+          <h3 id={titleId} className="text-lg font-display flex-1">Place limit / stop order</h3>
+          <button ref={closeButtonRef} onClick={onClose} aria-label="Close order dialog" className="h-8 w-8 rounded-lg hover:bg-white/10 inline-flex items-center justify-center"><BellClose className="h-4 w-4"/></button>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <div className="grid grid-cols-2 gap-2">
             <div className="flex rounded-lg overflow-hidden border border-white/10">
               <button type="button" onClick={() => setSide('buy')} className={`flex-1 py-2 text-xs ${side === 'buy' ? 'bg-accent-success/20 text-accent-success' : 'bg-white/5 text-white/65'}`}>Buy</button>
-              <button type="button" onClick={() => setSide('sell')} className={`flex-1 py-2 text-xs ${side === 'sell' ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-white/65'}`}>Sell</button>
+              <button type="button" onClick={() => setSide('sell')} className={`flex-1 py-2 text-xs ${side === 'sell' ? 'bg-accent-error/15 text-accent-error' : 'bg-white/5 text-white/65'}`}>Sell</button>
             </div>
             <div className="flex rounded-lg overflow-hidden border border-white/10">
-              <button type="button" onClick={() => setKind('limit')} className={`flex-1 py-2 text-xs ${kind === 'limit' ? 'bg-accent-success/15 text-blue-400' : 'bg-white/5 text-white/65'}`}>Limit</button>
-              <button type="button" onClick={() => setKind('stop')} className={`flex-1 py-2 text-xs ${kind === 'stop' ? 'bg-accent-success/15 text-blue-400' : 'bg-white/5 text-white/65'}`}>Stop</button>
+              <button type="button" onClick={() => setKind('limit')} className={`flex-1 py-2 text-xs ${kind === 'limit' ? 'bg-accent-success/15 text-accent-success' : 'bg-white/5 text-white/65'}`}>Limit</button>
+              <button type="button" onClick={() => setKind('stop')} className={`flex-1 py-2 text-xs ${kind === 'stop' ? 'bg-accent-success/15 text-accent-success' : 'bg-white/5 text-white/65'}`}>Stop</button>
             </div>
           </div>
           <label className="block">
@@ -782,7 +835,7 @@ export function BeneficiariesPanel() {
                     </td>
                     <td>
                       {b.status === 'active' && <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30">active</span>}
-                      {b.status === 'cooling-down' && <span className="chip bg-accent-success/15 text-blue-400 border border-accent-success/30" title={`Usable from ${new Date(b.usableAt).toLocaleString()}`}>cool-down</span>}
+                      {b.status === 'cooling-down' && <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30" title={`Usable from ${new Date(b.usableAt).toLocaleString()}`}>cool-down</span>}
                       {b.status === 'pending-email' && <span className="chip bg-white/5 text-white/65 border border-white/10">awaiting email</span>}
                     </td>
                     <td className="text-right">
@@ -813,6 +866,7 @@ function AddBeneficiaryModal({ open, onClose, onAdded }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
+  const { dialogRef, closeButtonRef, titleId, dialogProps } = useAccessibleDialog({ open, onClose });
   useEffect(() => { if (open) { setError(null); setDone(false); setLabel(''); setAddress(''); setMemo(''); setNetwork(''); } }, [open]);
   if (!open) return null;
   const submit = async (e) => {
@@ -826,10 +880,10 @@ function AddBeneficiaryModal({ open, onClose, onAdded }) {
   };
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 bg-ink-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div onClick={(e) => e.stopPropagation()} className="glass-strong w-full max-w-md p-6 relative">
+      <div ref={dialogRef} {...dialogProps} onClick={(e) => e.stopPropagation()} className="glass-strong w-full max-w-md p-6 relative">
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-lg font-display flex-1">Add beneficiary</h3>
-          <button onClick={onClose} aria-label="Close" className="h-8 w-8 rounded-lg hover:bg-white/10 inline-flex items-center justify-center"><BellClose className="h-4 w-4"/></button>
+          <h3 id={titleId} className="text-lg font-display flex-1">Add beneficiary</h3>
+          <button ref={closeButtonRef} onClick={onClose} aria-label="Close add beneficiary dialog" className="h-8 w-8 rounded-lg hover:bg-white/10 inline-flex items-center justify-center"><BellClose className="h-4 w-4"/></button>
         </div>
         {done ? (
           <div className="text-sm space-y-3">
@@ -909,13 +963,13 @@ export function KycPanel() {
         <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500/20 via-violet-500/20 to-indigo-500/20" />
         
         <div className="flex items-center flex-wrap gap-3 mb-4">
-          <ShieldCheck className="h-5 w-5 text-indigo-400"/>
+          <ShieldCheck className="h-5 w-5 text-cyan-400"/>
           <h3 className="font-display text-xl tracking-tight">KYC verification</h3>
           <motion.span 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.1 }}
-            className="chip bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 font-medium"
+            className="chip bg-indigo-500/15 text-cyan-400 border border-indigo-500/30 font-medium"
           >
             {summary.label}
           </motion.span>
@@ -1005,6 +1059,7 @@ function KycUpgradeModal({ open, onClose, requestedTier, onSubmitted }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const { notify } = useNotifications();
+  const { dialogRef, closeButtonRef, titleId, dialogProps } = useAccessibleDialog({ open, onClose });
   useEffect(() => { if (open) { setForm({}); setError(null); } }, [open]);
   if (!open || !requestedTier) return null;
   const submit = async (e) => {
@@ -1022,10 +1077,10 @@ function KycUpgradeModal({ open, onClose, requestedTier, onSubmitted }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 bg-ink-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div onClick={(e) => e.stopPropagation()} className="glass-strong w-full max-w-md p-6">
+      <div ref={dialogRef} {...dialogProps} onClick={(e) => e.stopPropagation()} className="glass-strong w-full max-w-md p-6">
         <div className="flex items-center gap-2 mb-4">
-          <h3 className="text-lg font-display flex-1">Upgrade to Tier {requestedTier}</h3>
-          <button onClick={onClose} aria-label="Close" className="h-8 w-8 rounded-lg hover:bg-white/10 inline-flex items-center justify-center"><BellClose className="h-4 w-4"/></button>
+          <h3 id={titleId} className="text-lg font-display flex-1">Upgrade to Tier {requestedTier}</h3>
+          <button ref={closeButtonRef} onClick={onClose} aria-label="Close KYC upgrade dialog" className="h-8 w-8 rounded-lg hover:bg-white/10 inline-flex items-center justify-center"><BellClose className="h-4 w-4"/></button>
         </div>
         <form onSubmit={submit} className="space-y-3 text-sm">
           {requestedTier === 1 && (
@@ -1118,7 +1173,7 @@ export function PortfolioPanel({ refreshKey }) {
         className="glass-strong p-6"
       >
         <h3 className="font-display text-xl mb-3">Portfolio P&amp;L</h3>
-        <p className="text-sm text-white/50 inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-blue-400"/> Loading positions…</p>
+        <p className="text-sm text-white/50 inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin text-slate-400"/> Loading positions…</p>
       </motion.section>
     );
   }
@@ -1422,7 +1477,7 @@ export function ConvertPanel({ onConverted } = {}) {
   return (
     <section className="glass-strong p-5">
       <div className="flex items-center gap-2 mb-3">
-        <ArrowRightLeft className="h-4 w-4 text-blue-400"/>
+        <ArrowRightLeft className="h-4 w-4 text-slate-400"/>
         <h3 className="font-display text-lg">Convert</h3>
         <span className="chip bg-white/5 text-white/60 border border-white/10 ml-auto">live mid + spread</span>
       </div>
@@ -1537,9 +1592,9 @@ export function EmptyStateCoach() {
   return (
     <section className="glass-strong p-5 border border-accent-success/20">
       <div className="flex items-center gap-2 mb-3">
-        <Rocket className="h-4 w-4 text-blue-400"/>
+        <Rocket className="h-4 w-4 text-slate-400"/>
         <h3 className="font-display text-lg">Start here</h3>
-        <span className="chip bg-accent-success/15 text-blue-400 border border-accent-success/30">new account</span>
+        <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30">new account</span>
         <button
           type="button"
           onClick={() => setDismissed(true)}
@@ -1550,7 +1605,7 @@ export function EmptyStateCoach() {
         </button>
       </div>
       <p className="text-xs text-white/55 mb-4">
-        Welcome to Oakmont Digital Markets Group. Complete these three steps to unlock the full broker dashboard.
+        Welcome to Oakmont Digital Capital Group. Complete these three steps to unlock the full broker dashboard.
       </p>
       <ol className="space-y-3">
         {steps.map((s, i) => (
@@ -1642,7 +1697,7 @@ export function DcaPanel({ onChanged } = {}) {
   return (
     <section className="glass-strong p-5">
       <div className="flex items-center gap-2 mb-3">
-        <Wallet className="h-4 w-4 text-blue-400" aria-hidden/>
+        <Wallet className="h-4 w-4 text-slate-400" aria-hidden/>
         <h3 className="font-display text-lg">Recurring buys (DCA)</h3>
         <span className="chip bg-white/5 text-white/60 border border-white/10 ml-auto">{active.length} active</span>
       </div>
@@ -1799,7 +1854,7 @@ export function ReferralPanel() {
           <button
             type="button"
             onClick={() => onCopy(data.code)}
-            className="btn-ghost text-[11px] px-2 py-1 inline-flex items-center gap-1"
+            className="btn-ghost btn-sm inline-flex items-center gap-1"
             aria-label="Copy referral code"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-accent-success"/> : <Copy className="h-3.5 w-3.5"/>}
@@ -1814,7 +1869,7 @@ export function ReferralPanel() {
           <button
             type="button"
             onClick={() => onCopy(data.shareUrl)}
-            className="btn-ghost text-[11px] px-2 py-1 inline-flex items-center gap-1"
+            className="btn-ghost btn-sm inline-flex items-center gap-1"
             aria-label="Copy referral share URL"
           >
             <Copy className="h-3.5 w-3.5"/>
@@ -1846,7 +1901,7 @@ export function ReferralPanel() {
 // Admin replies arrive over the existing notification centre.
 const TICKET_STATUS_COPY = {
   open: { label: 'Open', tone: 'text-accent-success' },
-  awaiting_user: { label: 'Awaiting you', tone: 'text-blue-400' },
+  awaiting_user: { label: 'Awaiting you', tone: 'text-slate-400' },
   answered: { label: 'Answered', tone: 'text-accent-success' },
   closed: { label: 'Closed', tone: 'text-white/45' },
 };
@@ -1930,12 +1985,12 @@ export function SupportPanel() {
   return (
     <section className="glass-strong p-5">
       <header className="flex items-center gap-2">
-        <LifeBuoy className="h-4 w-4 text-blue-400"/>
+        <LifeBuoy className="h-4 w-4 text-slate-400"/>
         <h3 className="font-display text-base">Support</h3>
         <button
           type="button"
           onClick={() => { setShowForm((s) => !s); setMsg(null); }}
-          className="btn-ghost text-xs px-2 py-1 ml-auto"
+          className="btn-ghost btn-sm ml-auto"
           aria-expanded={showForm}
           aria-controls="support-new-form"
         >
@@ -1943,7 +1998,7 @@ export function SupportPanel() {
         </button>
       </header>
       <p className="text-xs text-white/55 mt-1">
-        Ask the Oakmont Digital Markets Group desk anything - KYC, deposits, withdrawals, trade issues.
+        Ask the Oakmont Digital Capital Group desk anything - KYC, deposits, withdrawals, trade issues.
       </p>
       {showForm && (
         <form id="support-new-form" onSubmit={onCreate} className="mt-3 space-y-2">
@@ -2012,8 +2067,8 @@ export function SupportPanel() {
                       {(t.messages || []).map((m) => (
                         <li key={m.id} className={`rounded-lg px-3 py-2 text-xs whitespace-pre-wrap break-words ${m.authorRole === 'staff' ? 'bg-accent-success/10 border border-accent-success/20 text-white' : 'bg-white/5 border border-white/10 text-white/85'}`}>
                           <div className="flex items-center justify-between mb-0.5 text-[10px]">
-                            <span className={m.authorRole === 'staff' ? 'text-blue-400' : 'text-white/55'}>
-                              {m.authorRole === 'staff' ? 'Oakmont Digital Markets Group support' : 'You'}
+                            <span className={m.authorRole === 'staff' ? 'text-accent-success' : 'text-white/55'}>
+                              {m.authorRole === 'staff' ? 'Oakmont Digital Capital Group support' : 'You'}
                             </span>
                             <span className="text-white/35">{fmtTime(m.createdAt)}</span>
                           </div>
@@ -2034,7 +2089,7 @@ export function SupportPanel() {
                           type="button"
                           onClick={() => onReply(t.id)}
                           disabled={busy || !reply.trim()}
-                          className="btn-ghost text-xs px-2 py-1 disabled:opacity-50"
+                          className="btn-ghost btn-sm"
                           aria-label="Send reply"
                         >
                           <Send className="h-3.5 w-3.5"/>
@@ -2079,7 +2134,7 @@ export function SupportContactPanel() {
   return (
     <section id="support-section" className="glass-strong p-5">
       <div className="flex items-center gap-2 mb-3">
-        <LifeBuoy className="h-4 w-4 text-blue-400"/>
+        <LifeBuoy className="h-4 w-4 text-slate-400"/>
         <h3 className="font-display text-lg">Contact Support</h3>
       </div>
       <p className="text-sm text-white/60 mb-4">Need help? Reach out to our support team via your preferred channel.</p>

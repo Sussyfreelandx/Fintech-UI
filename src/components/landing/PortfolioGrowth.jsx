@@ -22,7 +22,7 @@ export function PortfolioGrowth() {
             disciplined strategy.
           </motion.h2>
           <p className="mt-3 text-white/65 max-w-xl">
-            Oakmont Digital Markets Group separates public multi-asset market visibility from private account servicing. Visitors see live brokerage coverage across stocks, ETFs, crypto, FX, commodities, futures and options; verified users manage balances and orders; funded clients receive administrator-supervised portfolio updates and reporting.
+            Oakmont Digital Capital Group separates public multi-asset market visibility from private account servicing. Visitors see live brokerage coverage across stocks, ETFs, crypto, FX, commodities, futures and options; verified users manage balances and orders; funded clients receive administrator-supervised portfolio updates and reporting.
           </p>
           <div className="mt-8 grid sm:grid-cols-3 gap-4">
             {[
@@ -39,7 +39,7 @@ export function PortfolioGrowth() {
         <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="lg:col-span-2 glass-strong p-6 flex flex-col items-center">
           <div className="w-full flex items-center justify-between">
             <p className="text-sm text-white/60">Brokerage asset-class coverage</p>
-            <span className="chip bg-accent-success/15 text-blue-400 border border-accent-success/30">
+            <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30">
               <TrendingUp className="h-3 w-3"/> Live coverage
             </span>
           </div>
