@@ -30,6 +30,21 @@ module.exports = {
           900: '#0f1520',
           950: '#0a0d16',
         },
+        graphite: {
+          950: '#0d0f12',
+          900: '#12151a',
+          800: '#171b22',
+          700: '#1d2128',
+          600: '#252a34',
+          500: '#2d323e',
+        },
+        charcoal: {
+          950: '#0a0c0f',
+          900: '#0e1115',
+          800: '#13161b',
+          700: '#181c22',
+          600: '#1f2329',
+        },
         slate: {
           900: '#0f1419',
           800: '#1a1f29',
@@ -41,6 +56,11 @@ module.exports = {
           200: '#cbd5e0',
           100: '#e2e8f0',
         },
+        steel: {
+          blue: '#5b6b7a',
+          muted: '#4a5568',
+          soft: '#64748b',
+        },
         accent: {
           primary: '#475569',
           primaryDark: '#334155',
@@ -49,29 +69,24 @@ module.exports = {
           success: '#10b981',
           error: '#ef4444',
           warning: '#f59e0b',
+          cyan: '#06b6d4',
+          cyanMuted: '#0891b2',
         },
-        blue: {
-          muted: '#64748b',
-          soft: '#94a3b8',
-        },
-        slate: {
-          muted: '#64748b',
-          soft: '#94a3b8',
-        },
-        cyan: '#06b6d4',
         fintech: {
           slate: '#475569',
           slateDark: '#334155',
           slateMuted: '#64748b',
           institutional: '#1e293b',
           professional: '#3f4652',
+          graphite: '#2d323e',
         },
       },
       boxShadow: {
-        glow: '0 0 40px -10px rgba(71, 85, 105, 0.25)',
-        'glow-success': '0 0 40px -10px rgba(16, 185, 129, 0.25)',
-        soft: '0 8px 30px rgba(0, 0, 0, 0.35)',
-        card: '0 4px 24px rgba(0, 0, 0, 0.25)',
+        glow: '0 0 32px -8px rgba(100, 116, 139, 0.20)',
+        'glow-success': '0 0 32px -8px rgba(16, 185, 129, 0.20)',
+        'glow-cyan': '0 0 32px -8px rgba(6, 182, 212, 0.18)',
+        soft: '0 6px 24px rgba(0, 0, 0, 0.40)',
+        card: '0 4px 20px rgba(0, 0, 0, 0.30)',
       },
       backgroundImage: {
         'gradient-radial':
