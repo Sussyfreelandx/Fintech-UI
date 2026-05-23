@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { memo, useEffect, useMemo, useState, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
@@ -34,8 +34,9 @@ HASH_TO_FEATURE['bot-section'] = 'analytics';
 HASH_TO_FEATURE['alerts-section'] = 'security';
 HASH_TO_FEATURE['settings-section'] = 'security';
 const DASHBOARD_FEATURE_IDS = new Set(DASHBOARD_FEATURES.map((feature) => feature.id));
+const EMPTY_POSITIONS = [];
 
-function DashboardLiveSignalRow({ symbol }) {
+const DashboardLiveSignalRow = memo(function DashboardLiveSignalRow({ symbol }) {
     const candles = useLiveKlines(symbol, '15m', 96);
     const signal = useMemo(() => buildMarketSignal(candles), [candles]);
     const market = candles[candles.length - 1];
@@ -60,7 +61,7 @@ function DashboardLiveSignalRow({ symbol }) {
             </td>
         </tr>
     );
-}
+});
 
 export default function DashboardPage({ initialFeature = 'overview' }) {
     const { user, loading } = useSession();
@@ -118,6 +119,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
     const [watchlistExpanded, setWatchlistExpanded] = useState(false);
     const [historyExpanded, setHistoryExpanded] = useState(false);
     const [liveWallet, setLiveWallet] = useState(null);
+    const [watchlistError, setWatchlistError] = useState(null);
     const refreshWallet = useCallback(async () => {
         if (!user) { setLiveWallet(null); return; }
         try { const w = await api.get('/api/wallet'); setLiveWallet(w); } catch (_) {}
@@ -132,8 +134,16 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
         (async () => {
             try {
                 const r = await api.get('/api/watchlist');
-                if (!cancelled) setWatchlistBases(Array.isArray(r.symbols) ? r.symbols : []);
-            } catch (_) { if (!cancelled) setWatchlistBases([]); }
+                if (!cancelled) {
+                    setWatchlistBases(Array.isArray(r.symbols) ? r.symbols : []);
+                    setWatchlistError(null);
+                }
+            } catch (_) {
+                if (!cancelled) {
+                    setWatchlistBases(null);
+                    setWatchlistError('Saved watchlist is temporarily unavailable. Showing the Oakmont live shortlist instead.');
+                }
+            }
         })();
         return () => { cancelled = true; };
     }, [user]);
@@ -143,7 +153,10 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
         }
         return DEFAULT_WATCHLIST_SYMBOLS;
     }, [user, watchlistBases]);
-    const visibleWatchlistSymbols = watchlistExpanded ? watchlistSymbols : watchlistSymbols.slice(0, 5);
+    const visibleWatchlistSymbols = useMemo(
+        () => (watchlistExpanded ? watchlistSymbols : watchlistSymbols.slice(0, 5)),
+        [watchlistExpanded, watchlistSymbols],
+    );
     const removeFromWatchlist = useCallback(async (pair) => {
         if (!user) return;
         const base = pair.endsWith('USDT') ? pair.slice(0, -4) : pair;
@@ -167,7 +180,11 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             .filter((sym) => !['USDT', 'USDC'].includes(sym))
             .map((sym) => `${sym}USDT`);
     }, [liveWallet]);
-    const livePrices = useLivePrices([...new Set([...watchlistSymbols, ...DEFAULT_TICKER_SYMBOLS, ...walletMarketSymbols, tradePair])]);
+    const livePriceSymbols = useMemo(
+        () => [...new Set([...watchlistSymbols, ...DEFAULT_TICKER_SYMBOLS, ...walletMarketSymbols, tradePair])],
+        [watchlistSymbols, walletMarketSymbols, tradePair],
+    );
+    const livePrices = useLivePrices(livePriceSymbols);
     const candles = useLiveKlines(tradePair, interval, 80);
     const lastCandle = candles[candles.length - 1];
     const chartLive = !!lastCandle?.live;
@@ -208,19 +225,24 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
         if (user) return [];
         return [];
     }, [liveWallet, livePrices, user]);
-    const totalBalance = wallets.reduce((s, w) => s + w.value, 0);
-    const portfolioOpenValue = wallets.reduce((s, w) => s + (w.openValue ?? w.value), 0);
-    const portfolioMarketChange = totalBalance - portfolioOpenValue;
-    const portfolioMarketPct = portfolioOpenValue > 0 ? (portfolioMarketChange / portfolioOpenValue) * 100 : 0;
+    const portfolioTotals = useMemo(() => {
+        const total = wallets.reduce((s, w) => s + w.value, 0);
+        const open = wallets.reduce((s, w) => s + (w.openValue ?? w.value), 0);
+        const change = total - open;
+        const pct = open > 0 ? (change / open) * 100 : 0;
+        return { total, open, change, pct };
+    }, [wallets]);
+    const totalBalance = portfolioTotals.total;
+    const portfolioOpenValue = portfolioTotals.open;
+    const portfolioMarketChange = portfolioTotals.change;
+    const portfolioMarketPct = portfolioTotals.pct;
     const portfolioAllocation = useMemo(
       () => wallets.map((w) => ({ label: w.sym, value: totalBalance ? Math.round((w.value / totalBalance) * 100) : 0, color: w.color })),
       [wallets, totalBalance],
     );
 
     // Live positions w/ mark + PnL (demo for anonymous, empty for logged-in without positions)
-    const positions = useMemo(() => {
-        return [];
-    }, [user, livePrices]);
+    const positions = EMPTY_POSITIONS;
     const openPnl = positions.reduce((s, p) => s + p.pnl, 0);
     const cashUSDT = liveWallet ? (liveWallet.balances?.USDT || 0) : 0;
     const userBalances = liveWallet?.balances || {};
@@ -237,10 +259,13 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
         const next = (cashUSDT * pct) / px;
         setAmount(next > 0 ? next.toFixed(6) : '0');
     }, [cashUSDT, effectivePrice, requireAuth]);
-    const activeFeatureMeta = DASHBOARD_FEATURES.find((f) => f.id === activeFeature) || DASHBOARD_FEATURES[0];
+    const activeFeatureMeta = useMemo(
+        () => DASHBOARD_FEATURES.find((f) => f.id === activeFeature) || DASHBOARD_FEATURES[0],
+        [activeFeature],
+    );
     const featureHref = (feature) => feature.path || '/dashboard';
     const showAuthGate = !loading && !user && !['overview', 'trade', 'wallet'].includes(activeFeature);
-    const tradeHistory = liveWallet?.transactions || [];
+    const tradeHistory = useMemo(() => liveWallet?.transactions || [], [liveWallet]);
     const analyticsSeries = useMemo(() => {
       const days = 14;
       const buckets = new Array(days).fill(0);
@@ -253,10 +278,19 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
       }
       return buckets;
     }, [tradeHistory]);
-    const completedTrades = tradeHistory.filter((tx) => ['invest', 'buy', 'sell', 'brokerage_invest'].includes(tx.type) && tx.status === 'completed').length;
-    const averageTradeValue = completedTrades
-      ? tradeHistory.filter((tx) => ['invest', 'buy', 'sell', 'brokerage_invest'].includes(tx.type) && tx.status === 'completed').reduce((s, tx) => s + (Number(tx.usdValue) || 0), 0) / completedTrades
-      : 0;
+    const tradeStats = useMemo(() => {
+      let completed = 0;
+      let completedValue = 0;
+      for (const tx of tradeHistory) {
+        if (['invest', 'buy', 'sell', 'brokerage_invest'].includes(tx.type) && tx.status === 'completed') {
+          completed += 1;
+          completedValue += Number(tx.usdValue) || 0;
+        }
+      }
+      return { completed, average: completed ? completedValue / completed : 0 };
+    }, [tradeHistory]);
+    const completedTrades = tradeStats.completed;
+    const averageTradeValue = tradeStats.average;
 
     return (<div className="flex relative min-h-screen bg-gradient-to-br from-slate-950/50 via-slate-900/50 to-zinc-950/60">
       <Sidebar />
@@ -267,7 +301,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
           <section className="glass-strong p-4 sm:p-5">
             <div className="flex flex-col lg:flex-row lg:items-end gap-4">
               <div className="flex-1">
-                  <p className="text-xs uppercase tracking-[0.24em] text-blue-400/80">Dedicated workspace</p>
+                  <p className="text-xs uppercase tracking-[0.24em] text-white/45">Dedicated workspace</p>
                 <h1 className="mt-1 text-2xl sm:text-3xl font-display">{activeFeatureMeta.label}</h1>
                 <p className="mt-1 text-sm text-white/60 max-w-3xl">{activeFeatureMeta.blurb}</p>
               </div>
@@ -296,7 +330,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             </section>
           )}
           {showAuthGate && (
-            <section className="glass-strong p-5 border-blue-500/25">
+            <section className="glass-strong p-5 border-slate-500/20">
               <p className="text-sm text-white/60">{activeFeatureMeta.label} workspace</p>
               <h2 className="mt-1 text-2xl font-display">Sign in to view live {activeFeatureMeta.label.toLowerCase()} content.</h2>
               <p className="mt-2 text-sm text-white/60 max-w-2xl">Each feature now has its own page on desktop and mobile. Secure account data stays hidden until your session is confirmed.</p>
@@ -335,7 +369,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
             <AvailableCashSelector wallets={wallets} livePrices={livePrices} />
             <div className="glass p-5">
               <p className="text-sm text-white/60">{t('openPnL')}</p>
-              <p className={`text-2xl font-display mt-1 ${openPnl >= 0 ? 'text-blue-400' : 'text-accent-error'}`}>{openPnl >= 0 ? '+' : ''}{formatUSD(openPnl)}</p>
+              <p className={`text-2xl font-display mt-1 ${openPnl >= 0 ? 'text-accent-success' : 'text-accent-error'}`}>{openPnl >= 0 ? '+' : ''}{formatUSD(openPnl)}</p>
               <p className="text-xs text-white/50 mt-1">{positions.length} {t('openPositions')}</p>
             </div>
           </section> : <section className="glass-strong p-5">
@@ -384,7 +418,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                     </button>))}
                 </div>
               </div>
-              <div className="mt-3 rounded-xl bg-ink-900/60 border border-blue-500/10 p-2">
+              <div className="mt-3 rounded-xl bg-ink-900/60 border border-slate-700/15 p-2">
                 <div className="mb-2 flex items-center justify-between px-1 text-[11px] text-white/45">
                   <span className={chartLive ? 'text-accent-success' : 'text-white/45'}>
                     {chartLive ? 'Live Binance candles' : 'Connecting to Binance candles'}
@@ -454,7 +488,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                     if (!requireAuth()) return;
                     if (side === 'buy') openInvest(investSymbol);
                     else setSellOpen(true);
-                }} className={`btn w-full justify-center text-sm font-semibold ${side === 'buy' ? 'bg-accent-success text-ink-950 hover:shadow-glow' : 'bg-accent-error text-white'}`}>
+                }} className={`${side === 'buy' ? 'btn-dashboard' : 'btn-error'} w-full justify-center`}>
                   {user ? (side === 'buy' ? `${t('buy')} ${investSymbol}` : `${t('sell')} ${investSymbol}`) : t('trade')}
                 </button>
               </div>
@@ -499,7 +533,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
           {user && activeFeature === 'analytics' && (
             <section className="glass-strong p-5">
               <div className="flex items-center flex-wrap gap-2 mb-3">
-                <Bot className="h-4 w-4 text-blue-400"/>
+                <Bot className="h-4 w-4 text-slate-400"/>
                 <h3 className="font-display text-lg">Live market signals</h3>
                 <span className="chip bg-accent-success/15 text-accent-success border border-accent-success/30 text-[10px]">● per-symbol</span>
               </div>
@@ -549,6 +583,8 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                 </button>
               </div>
               <div className="mt-3 divide-y divide-white/5">
+                {watchlistError && <p className="mb-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/65">{watchlistError}</p>}
+                {watchlistBases === null && !watchlistError && <p className="mb-3 text-xs text-white/50">Loading your saved watchlist…</p>}
                 {visibleWatchlistSymbols.map((s, i) => {
                   const meta = SYMBOL_META[s];
                   const d = livePrices[s];
@@ -626,7 +662,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                           <td className={pos ? 'text-accent-success' : 'text-accent-error'}>{pos ? '+' : ''}{formatUSD(p.pnl)}</td>
                           <td className={pos ? 'text-accent-success' : 'text-accent-error'}>{pos ? '+' : ''}{p.roe.toFixed(2)}%</td>
                           <td className="text-right">
-                            <button className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10">Close</button>
+                            <button className="btn-ghost btn-sm">Close</button>
                           </td>
                         </tr>);
                       })}
@@ -707,7 +743,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                         <div className="space-y-1.5">
                           {movers.length ? movers.map((m) => (
                             <div key={m.sym} className="glass-light p-2 flex items-center gap-2 text-xs">
-                               <Zap className="h-3.5 w-3.5 text-blue-400"/>
+                               <Zap className="h-3.5 w-3.5 text-slate-400"/>
                               <span className="flex-1 font-semibold">{m.sym}</span>
                               <span className={m.deltaPct >= 0 ? 'text-accent-success' : 'text-accent-error'}>{m.deltaPct >= 0 ? '+' : ''}{m.deltaPct.toFixed(2)}%</span>
                             </div>
@@ -717,7 +753,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                       <div className="glass-light p-3 text-xs space-y-1.5 border border-accent-success/20">
                         <p className="font-semibold text-accent-success">Market insight</p>
                         <p className="text-white/75">{trend}</p>
-                         {concentration && <p className="text-blue-400">{concentration}</p>}
+                         {concentration && <p className="text-white/70">{concentration}</p>}
                       </div>
                     </div>
                   ) : (
@@ -757,7 +793,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                 <>
                   <div className="mt-3 space-y-2">
                     {['Grid · SOL/USDT', 'DCA · BTC', 'Arbitrage · ETH'].map((s, i) => (<div key={s} className="glass-light p-3 flex items-center gap-3">
-                        <Zap className="h-4 w-4 text-blue-400"/>
+                        <Zap className="h-4 w-4 text-slate-400"/>
                         <p className="text-sm flex-1">{s}</p>
                         <span className="text-xs text-accent-success">+{(2.4 + i * 1.7).toFixed(1)}%</span>
                       </div>))}
@@ -794,7 +830,7 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
                     const isIn = displayType === 'Buy' || displayType === 'Deposit';
                     return (<tr key={i}>
                         <td className="py-2.5">
-                          <span className={`chip ${isIn ? 'bg-accent-success/15 text-accent-success' : 'bg-blue-500/15 text-blue-400'}`}>
+                          <span className={`chip ${isIn ? 'bg-accent-success/15 text-accent-success' : 'bg-accent-error/15 text-accent-error'}`}>
                             {isIn ? <ArrowDownLeft className="h-3 w-3"/> : <ArrowUpRight className="h-3 w-3"/>}
                             {displayType}
                           </span>
@@ -833,15 +869,15 @@ export default function DashboardPage({ initialFeature = 'overview' }) {
       <BrokerageInvestModal open={brokerageInvestOpen} onClose={() => setBrokerageInvestOpen(false)} onSuccess={refreshWallet} defaultSymbol={brokerageInvestSymbol} defaultClass={brokerageInvestClass} walletBalances={userBalances}/>
     </div>);
 }
-function Field({ label, value, onChange, disabled, }) {
+const Field = memo(function Field({ label, value, onChange, disabled, }) {
     return (<label className="block">
       <span className="text-xs text-white/55">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="mt-1 w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-accent-success/50 disabled:opacity-50"/>
+      <input value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} className="mt-1 field-control disabled:opacity-50"/>
     </label>);
-}
-function Row({ k, v }) {
+});
+const Row = memo(function Row({ k, v }) {
     return (<div className="flex justify-between text-white/65">
       <span>{k}</span>
       <span className="text-white">{v}</span>
     </div>);
-}
+});

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { getCryptoLogo } from '@/lib/cryptoLogos';
 import { useSession } from '@/lib/useSession';
+import { useAccessibleDialog } from '@/lib/useAccessibleDialog';
 import { BROKERAGE_TABS } from './brokerageTabs';
 
 const TABS = BROKERAGE_TABS;
@@ -155,6 +156,7 @@ function QuoteDetail({ q, onClose }) {
   const [rangeId, setRangeId] = useState('1mo');
   const range = RANGE_PRESETS.find((r) => r.id === rangeId) || RANGE_PRESETS[2];
   const [chart, setChart] = useState(null);
+  const { dialogRef, closeButtonRef, titleId, dialogProps } = useAccessibleDialog({ open: !!q, onClose });
   useEffect(() => {
     let cancelled = false;
     setChart(null);
@@ -183,13 +185,15 @@ function QuoteDetail({ q, onClose }) {
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
         className="glass-strong w-full max-w-4xl p-6 max-h-[92vh] overflow-auto relative" 
+        ref={dialogRef}
+        {...dialogProps}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500/20 via-teal-500/20 to-blue-500/20" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-slate-500/15 via-accent-success/10 to-slate-500/15" />
         
         <div className="flex items-start gap-4 mb-5">
           <div className="flex-1 min-w-0">
-            <h3 className="font-display text-2xl tracking-tight">
+            <h3 id={titleId} className="font-display text-2xl tracking-tight">
               {q.symbol} 
               <span className="text-white/50 text-base font-normal ml-2">· {q.name}</span>
             </h3>
@@ -211,9 +215,10 @@ function QuoteDetail({ q, onClose }) {
             </span>
           </motion.p>
           <button 
+            ref={closeButtonRef}
             onClick={onClose} 
             className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 inline-flex items-center justify-center transition-colors duration-200 group" 
-            aria-label="Close"
+            aria-label={`Close ${q.symbol} quote details`}
           >
             <X className="h-4 w-4 group-hover:scale-110 transition-transform"/>
           </button>
@@ -352,7 +357,10 @@ function BrokerageBoard({ assetClass }) {
       >
         <div className="relative flex-1 min-w-[14rem]">
           <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/35"/>
+          <label htmlFor={`brokerage-search-${assetClass}`} className="sr-only">Search brokerage symbols</label>
           <input 
+            id={`brokerage-search-${assetClass}`}
+            type="search"
             value={q} 
             onChange={(e) => setQ(e.target.value)} 
             placeholder="Search symbol or name" 
@@ -383,7 +391,7 @@ function BrokerageBoard({ assetClass }) {
           animate={{ opacity: 1 }}
           className="glass-light p-8 text-center text-sm text-white/50 inline-flex items-center gap-2.5 justify-center w-full"
         >
-          <Loader2 className="h-5 w-5 animate-spin text-blue-400"/> 
+          <Loader2 className="h-5 w-5 animate-spin text-slate-400"/> 
           <span>Connecting to live market feed…</span>
         </motion.div>
       ) : (
@@ -434,11 +442,11 @@ function CryptoBoard() {
           <Link key={r.symbol} href={`/markets/${r.symbol}`} className="glass-light p-3 flex items-center gap-3 hover:bg-white/10 transition">
             {logo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={logo} alt={r.symbol} width={32} height={32} loading="lazy"
+              <img src={logo} alt={`${r.name || r.symbol} logo`} width={32} height={32} loading="lazy"
                 className="h-8 w-8 rounded-full bg-white/5 border border-white/10 object-contain p-0.5"
-                onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling.style.display = 'inline-flex'; }} />
+                onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
             ) : null}
-            <span className={`h-8 w-8 rounded-full ${logo ? 'hidden' : 'inline-flex'} items-center justify-center bg-white/5 border border-white/10`} style={{ background: r.color || undefined }}><Wallet className="h-3.5 w-3.5 text-white/75"/></span>
+            <span className={`h-8 w-8 rounded-full ${logo ? 'hidden' : 'inline-flex'} items-center justify-center bg-white/5 border border-white/10`} style={{ background: r.color || undefined }} role="img" aria-label={`${r.name || r.symbol} fallback mark`}><Wallet className="h-3.5 w-3.5 text-white/75"/></span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">{r.symbol}</p>
               <p className="text-[11px] text-white/55 truncate">{r.name}</p>
@@ -654,7 +662,7 @@ export default function BrokerageClient({ initialTab = 'stocks' }) {
           }}
           className="glass p-5 hover:bg-white/[0.03] transition-all duration-300 group"
         >
-          <BarChart3 className="h-6 w-6 text-blue-400 group-hover:scale-110 transition-transform duration-300"/>
+          <BarChart3 className="h-6 w-6 text-slate-400 group-hover:scale-110 transition-transform duration-300"/>
           <h3 className="font-display mt-3 text-lg">Brokerage account</h3>
           <p className="text-sm text-white/60 mt-2 leading-relaxed">Single account, every asset class. Stocks, ETFs, options, futures, forex, commodities and crypto in one balance.</p>
         </motion.div>
@@ -676,7 +684,7 @@ export default function BrokerageClient({ initialTab = 'stocks' }) {
           }}
           className="glass p-5 hover:bg-white/[0.03] transition-all duration-300 group"
         >
-          <Activity className="h-6 w-6 text-blue-400 group-hover:scale-110 transition-transform duration-300"/>
+          <Activity className="h-6 w-6 text-slate-400 group-hover:scale-110 transition-transform duration-300"/>
           <h3 className="font-display mt-3 text-lg">Risk &amp; reporting</h3>
           <p className="text-sm text-white/60 mt-2 leading-relaxed">Real-time PnL, margin, exposure and tax-ready statements. Suitable for retail, professional and institutional clients.</p>
         </motion.div>
@@ -719,7 +727,7 @@ export default function BrokerageClient({ initialTab = 'stocks' }) {
             >
               <p className="text-sm font-semibold text-white">{v.label}</p>
               <p className="text-[11px] text-white/50 mt-1.5 leading-relaxed">{v.blurb}</p>
-              <p className="text-[10px] text-blue-400/80 mt-2">Live symbols and user-visible signals</p>
+              <p className="text-[10px] text-white/45 mt-2">Live symbols and user-visible signals</p>
             </motion.div>
           ))}
         </motion.div>

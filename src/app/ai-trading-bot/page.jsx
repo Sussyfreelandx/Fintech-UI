@@ -6,14 +6,14 @@ import AITradingBotClient from './AITradingBotClient';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-    title: 'Markets Intelligence - Real-Time Signals | Oakmont Digital Markets Group',
+    title: 'Markets Intelligence - Real-Time Signals | Oakmont Digital Capital Group',
     description: 'Live data-driven trading signals across major crypto markets - RSI, momentum, trend bias and volatility refreshed every 15 seconds.',
 };
 
 export default function AITradingBotPage() {
     return (
       <>
-        <div className="relative min-h-screen bg-gradient-to-br from-violet-950/30 via-slate-950/60 to-indigo-950/40">
+        <div className="relative min-h-screen bg-gradient-to-br from-slate-950/50 via-graphite-900/40 to-charcoal-950/50">
         <Navbar />
         <main className="pt-10 pb-20 px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto">

@@ -40,25 +40,30 @@ export default function AdminPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [actionMsg, setActionMsg] = useState(null);
+  const [failedFeeds, setFailedFeeds] = useState([]);
 
   const refresh = useCallback(async () => {
     if (!user?.isAdmin) return;
     setRefreshing(true);
     try {
+      const request = (key, promise, fallback) => promise
+        .then((data) => ({ key, ok: true, data }))
+        .catch(() => ({ key, ok: false, data: fallback }));
       const [m, u, tx, k, t, a] = await Promise.all([
-        api.get('/api/admin/metrics').catch(() => null),
-        api.get('/api/admin/users').catch(() => ({ users: [] })),
-        api.get('/api/admin/transactions').catch(() => ({ transactions: [] })),
-        api.get('/api/admin/kyc').catch(() => ({ pending: [], recent: [] })),
-        api.get('/api/admin/support').catch(() => ({ items: [] })),
-        api.get('/api/admin/audit-log?limit=200').catch(() => ({ entries: [] })),
+        request('metrics', api.get('/api/admin/metrics'), null),
+        request('users', api.get('/api/admin/users'), { users: [] }),
+        request('transactions', api.get('/api/admin/transactions'), { transactions: [] }),
+        request('kyc', api.get('/api/admin/kyc'), { pending: [], recent: [] }),
+        request('support', api.get('/api/admin/support'), { items: [] }),
+        request('audit', api.get('/api/admin/audit-log?limit=200'), { entries: [] }),
       ]);
-      setMetrics(m);
-      setUsers(u.users || []);
-      setTransactions(tx.transactions || []);
-      setKyc({ pending: k.pending || [], recent: k.recent || [] });
-      setTickets(t.items || []);
-      setAudit(a.entries || []);
+      setFailedFeeds([m, u, tx, k, t, a].filter((feed) => !feed.ok).map((feed) => feed.key));
+      setMetrics((prev) => (m.ok ? m.data : prev));
+      setUsers((prev) => (u.ok ? (u.data.users || []) : prev));
+      setTransactions((prev) => (tx.ok ? (tx.data.transactions || []) : prev));
+      setKyc((prev) => (k.ok ? { pending: k.data.pending || [], recent: k.data.recent || [] } : prev));
+      setTickets((prev) => (t.ok ? (t.data.items || []) : prev));
+      setAudit((prev) => (a.ok ? (a.data.entries || []) : prev));
     } finally {
       setRefreshing(false);
     }
@@ -225,7 +230,7 @@ export default function AdminPage() {
         <AdminSidebar />
         <div className="flex-1 min-w-0">
           <TopBar title="Admin Console" />
-          <main className="p-6"><div className="glass-strong p-6 text-sm inline-flex items-center gap-3"><Lock className="h-5 w-5 text-indigo-400"/> Sign in as an administrator. <a href="/login?next=/admin" className="ml-2 btn-admin text-xs">Sign in</a></div></main>
+          <main className="p-6"><div className="glass-strong p-6 text-sm inline-flex items-center gap-3"><Lock className="h-5 w-5 text-slate-400"/> Sign in as an administrator. <a href="/login?next=/admin" className="ml-2 btn-admin text-xs">Sign in</a></div></main>
         </div>
       </div>
     );
@@ -236,7 +241,7 @@ export default function AdminPage() {
         <AdminSidebar />
         <div className="flex-1 min-w-0">
           <TopBar title="Admin Console" />
-          <main className="p-6"><div className="glass-strong p-6 text-sm inline-flex items-center gap-3 text-blue-400"><AlertTriangle className="h-5 w-5"/> Your account is not an administrator.</div></main>
+          <main className="p-6"><div className="glass-strong p-6 text-sm inline-flex items-center gap-3 text-cyan-400"><AlertTriangle className="h-5 w-5"/> Your account is not an administrator.</div></main>
         </div>
       </div>
     );
@@ -247,9 +252,14 @@ export default function AdminPage() {
   const usersNew7d = metrics?.users?.newLast7d ?? 0;
   const kycPending = kyc.pending.length;
   const fraudCount24h = fraudAlerts.length;
+  const metricsUnavailable = !metrics;
+  const metricsStale = failedFeeds.includes('metrics');
+  const feedIssueMessage = failedFeeds.length
+    ? `Some live admin feeds are temporarily unavailable: ${failedFeeds.join(', ')}. Oakmont is showing the latest verified snapshot where possible.`
+    : null;
 
   return (
-    <div className="flex relative min-h-screen bg-gradient-to-br from-rose-950/20 via-slate-950/60 to-zinc-950/60">
+    <div className="flex relative min-h-screen bg-gradient-to-br from-slate-950/50 via-graphite-900/40 to-charcoal-950/50">
       <AdminSidebar />
       <div className="flex-1 min-w-0 pb-24 lg:pb-0">
         <TopBar title="Admin Console" />
@@ -259,15 +269,20 @@ export default function AdminPage() {
               {actionMsg.text}
             </div>
           )}
+          {feedIssueMessage && (
+            <div className="text-sm px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-white/70" role="status">
+              {feedIssueMessage}
+            </div>
+          )}
 
           <AdminOperations />
 
           {/* KPIs - all live from /api/admin/metrics */}
           <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { k: 'Total users', v: usersTotal.toLocaleString(), sub: `+${usersNew7d} new 7d · ${metrics?.users?.mau || 0} MAU`, icon: Users, color: 'text-accent-success' },
-              { k: 'AUM (live)', v: formatUSD(metrics?.aum || 0, 0), sub: `${(metrics?.transactions?.last24h || 0)} tx in 24h`, icon: DollarSign, color: 'text-indigo-400' },
-              { k: 'KYC pending', v: kycPending.toLocaleString(), sub: kycPending ? 'Awaiting review' : 'Queue clear', icon: ShieldCheck, color: 'text-indigo-400' },
+              { k: 'Total users', v: usersTotal.toLocaleString(), sub: metricsUnavailable ? 'Awaiting live usage metrics' : `+${usersNew7d} new 7d · ${metrics?.users?.mau || 0} MAU`, icon: Users, color: 'text-accent-success' },
+              { k: 'AUM (live)', v: metricsUnavailable ? '—' : formatUSD(metrics?.aum || 0, 0), sub: metricsUnavailable ? 'Live treasury metrics unavailable' : `${(metrics?.transactions?.last24h || 0)} tx in 24h`, icon: DollarSign, color: 'text-slate-400' },
+              { k: 'KYC pending', v: kycPending.toLocaleString(), sub: kycPending ? 'Awaiting review' : 'Queue clear', icon: ShieldCheck, color: 'text-slate-400' },
               { k: 'Risk alerts (24h)', v: fraudCount24h.toLocaleString(), sub: fraudCount24h ? 'Recent audit events' : 'No active alerts', icon: AlertTriangle, color: 'text-accent-error' },
             ].map((s, i) => {
               const Icon = s.icon;
@@ -275,7 +290,7 @@ export default function AdminPage() {
                 <motion.div key={s.k} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="glass p-5">
                   <div className="flex items-center justify-between">
                     <Icon className={`h-5 w-5 ${s.color}`} />
-                    <Sparkline seed={i + 1} positive width={70} height={28} />
+                    {metricsUnavailable && i === 1 ? <span className="text-[11px] text-white/35">fallback</span> : <Sparkline seed={i + 1} positive width={70} height={28} />}
                   </div>
                   <p className="mt-4 text-2xl font-display">{s.v}</p>
                   <p className="text-xs text-white/55 mt-1">{s.k} · {s.sub}</p>
@@ -287,22 +302,23 @@ export default function AdminPage() {
           <section id="brokerage" className="glass-strong p-4 overflow-hidden">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
-                <p className="font-semibold flex items-center gap-2"><Activity className="h-4 w-4 text-indigo-400"/> Live brokerage signals</p>
+                <p className="font-semibold flex items-center gap-2"><Activity className="h-4 w-4 text-slate-400"/> Live brokerage signals</p>
                 <p className="text-xs text-white/55">
-                  {metrics?.brokerage?.liveQuotes || 0} live quotes across {metrics?.brokerage?.symbols || 0} visible symbols
+                  {metricsUnavailable ? 'Live brokerage metrics are reconnecting.' : `${metrics?.brokerage?.liveQuotes || 0} live quotes across ${metrics?.brokerage?.symbols || 0} visible symbols`}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2 text-[11px]">
                 {(metrics?.brokerage?.enabledClasses || []).map((cls) => (
                   <span key={cls} className="chip bg-white/5 border border-white/10 text-white/70 capitalize">{cls}</span>
                 ))}
+                {metricsUnavailable && <span className="chip bg-white/5 border border-white/10 text-white/50">feed reconnecting</span>}
               </div>
             </div>
             <div className="mt-3 grid sm:grid-cols-3 gap-2 text-xs">
               {['Accumulate', 'Hold / observe', 'Reduce'].map((name) => (
                 <div key={name} className="glass-light p-3">
                   <p className="text-white/55">{name}</p>
-                  <p className="text-2xl font-display mt-1">{metrics?.brokerage?.signalCounts?.[name] || 0}</p>
+                  <p className="text-2xl font-display mt-1">{metricsUnavailable ? '—' : metrics?.brokerage?.signalCounts?.[name] || 0}</p>
                 </div>
               ))}
             </div>
@@ -330,7 +346,7 @@ export default function AdminPage() {
                     </tr>
                   ))}
                   {!(metrics?.brokerage?.signals || []).length && (
-                    <tr><td colSpan={6} className="py-6 text-center text-white/45">Awaiting live brokerage quotes.</td></tr>
+                    <tr><td colSpan={6} className="py-6 text-center text-white/45">{metricsUnavailable || metricsStale ? 'Live brokerage metrics are temporarily unavailable.' : 'Awaiting live brokerage quotes.'}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -385,7 +401,10 @@ export default function AdminPage() {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="font-semibold">User management <span className="text-xs text-white/45 font-normal">({visibleUsers.length} / {users.length})</span></p>
               <div className="flex items-center gap-2 ml-auto">
+                <label htmlFor="admin-user-search" className="sr-only">Search admin users</label>
                 <input
+                  id="admin-user-search"
+                  type="search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search users…"
@@ -421,7 +440,7 @@ export default function AdminPage() {
                         <td className="font-medium">{u.name || <span className="text-white/45">-</span>}</td>
                         <td className="text-white/75">{u.email}</td>
                         <td>
-                          {u.isAdmin ? <span className="chip bg-accent-success/15 text-blue-400 border border-accent-success/30">admin</span> : <span className="chip bg-white/5 text-white/70 border border-white/10">user</span>}
+                          {u.isAdmin ? <span className="chip bg-accent-success/15 text-cyan-400 border border-accent-success/30">admin</span> : <span className="chip bg-white/5 text-white/70 border border-white/10">user</span>}
                         </td>
                         <td>{formatUSD(usdBal(u.balances), 2)}</td>
                         <td>
@@ -431,7 +450,7 @@ export default function AdminPage() {
                           <div className="inline-flex items-center gap-1">
                             {!u.isAdmin && (
                               <>
-                                <button onClick={() => freezeUser(u)} title={status === 'active' ? 'Freeze account' : 'Unfreeze account'} className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-blue-500/20 inline-flex items-center gap-1">
+                                <button onClick={() => freezeUser(u)} title={status === 'active' ? 'Freeze account' : 'Unfreeze account'} className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-cyan-500/20 inline-flex items-center gap-1">
                                   <Lock className="h-3 w-3"/> {status === 'active' ? 'Freeze' : 'Unfreeze'}
                                 </button>
                                 <button onClick={() => resetBalances(u)} title="Reset all balances to zero" className="text-xs px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 inline-flex items-center gap-1">
@@ -534,7 +553,7 @@ export default function AdminPage() {
                       <tr key={t.id}>
                         <td className="py-2.5 text-white/55 text-xs">{relativeTime(t.createdAt)}</td>
                         <td>
-                          <span className={`chip ${isCredit ? 'bg-accent-success/15 text-accent-success' : 'bg-blue-500/15 text-blue-400'}`}>
+                          <span className={`chip ${isCredit ? 'bg-accent-success/15 text-accent-success' : 'bg-cyan-500/15 text-cyan-400'}`}>
                             {isCredit ? <ArrowDownLeft className="h-3 w-3"/> : <ArrowUpRight className="h-3 w-3"/>} {t.type}
                           </span>
                         </td>
@@ -543,7 +562,7 @@ export default function AdminPage() {
                         <td>{Number(t.amount || 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
                         <td>{formatUSD(t.usdValue || 0)}</td>
                         <td>
-                          <span className={`chip ${t.status === 'completed' ? 'bg-white/10 text-white' : t.status === 'pending' ? 'bg-blue-500/15 text-blue-400' : 'bg-accent-error/15 text-accent-error'}`}>{t.status || 'completed'}</span>
+                          <span className={`chip ${t.status === 'completed' ? 'bg-white/10 text-white' : t.status === 'pending' ? 'bg-cyan-500/15 text-cyan-400' : 'bg-accent-error/15 text-accent-error'}`}>{t.status || 'completed'}</span>
                         </td>
                       </tr>
                     );
@@ -578,10 +597,10 @@ export default function AdminPage() {
 
           {/* Settings anchor - links from sidebar land here */}
           <section id="settings" className="glass-strong p-5">
-            <p className="font-semibold flex items-center gap-2"><SettingsIcon className="h-4 w-4 text-indigo-400"/> Console settings</p>
-            <p className="text-xs text-white/55 mt-1">Operational controls for the Oakmont Digital Markets Group admin console. Adjust polling cadence and reload live data without leaving the page.</p>
+            <p className="font-semibold flex items-center gap-2"><SettingsIcon className="h-4 w-4 text-slate-400"/> Console settings</p>
+            <p className="text-xs text-white/55 mt-1">Operational controls for the Oakmont Digital Capital Group admin console. Adjust polling cadence and reload live data without leaving the page.</p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button onClick={refresh} disabled={refreshing} className="btn-admin-outline text-sm inline-flex items-center gap-1 disabled:opacity-60">
+              <button onClick={refresh} disabled={refreshing} className="btn-admin-outline inline-flex items-center gap-1">
                 {refreshing ? <Loader2 className="h-4 w-4 animate-spin"/> : <RefreshCw className="h-4 w-4"/>} Refresh all panels
               </button>
               <a href="/api/admin/export?kind=users" className="btn-ghost text-sm">Export users CSV</a>
