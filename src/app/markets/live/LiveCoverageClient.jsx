@@ -6,7 +6,8 @@ import {
   Activity, Search, RefreshCw, Loader2, TrendingUp, TrendingDown, ArrowRight, X,
 } from 'lucide-react';
 import { CandlestickChart } from '@/components/ui/Charts';
-import { useLiveKlines } from '@/lib/useLiveData';
+import { useLiveKlines, CONNECTION_STATUS } from '@/lib/useLiveData';
+import { ConnectionBadge, ConnectionStatusBar, StaleDataOverlay } from '@/components/ui/ConnectionStatus';
 
 const ASSET_TAB_LABELS = {
   all: 'All',
@@ -235,15 +236,18 @@ export default function LiveCoverageClient() {
   const [search, setSearch] = useState('');
   const [activeSymbol, setActiveSymbol] = useState(null);
   const [refreshAt, setRefreshAt] = useState(0);
+  const [feedStatus, setFeedStatus] = useState(CONNECTION_STATUS.CONNECTING);
+  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
+  const mountedRef = useRef(true);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal) => {
     setLoading(true);
-    const ctrl = new AbortController();
     try {
       const [bq, cq] = await Promise.all([
-        fetch('/api/brokerage/quotes', { cache: 'no-store', signal: ctrl.signal }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-        fetch('/api/markets', { cache: 'no-store', signal: ctrl.signal }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        fetch('/api/brokerage/quotes', { cache: 'no-store', signal }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        fetch('/api/markets', { cache: 'no-store', signal }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
+      if (!mountedRef.current || signal?.aborted) return;
       if (Array.isArray(bq?.quotes)) setBrokerageQuotes(bq.quotes);
       if (Array.isArray(cq?.markets)) {
         const mapped = cq.markets.map((m) => ({
@@ -260,16 +264,35 @@ export default function LiveCoverageClient() {
         }));
         setCryptoQuotes(mapped);
       }
-      setRefreshAt(Date.now());
+      if (bq || cq) {
+        setRefreshAt(Date.now());
+        setFeedStatus(CONNECTION_STATUS.LIVE);
+        setConsecutiveFailures(0);
+      } else {
+        throw new Error('both feeds failed');
+      }
+    } catch (_) {
+      if (!mountedRef.current || signal?.aborted) return;
+      setConsecutiveFailures((prev) => {
+        const next = prev + 1;
+        setFeedStatus(next >= 3 ? CONNECTION_STATUS.DISCONNECTED : CONNECTION_STATUS.DEGRADED);
+        return next;
+      });
     } finally {
-      setLoading(false);
+      if (mountedRef.current && !signal?.aborted) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    load();
-    const id = setInterval(load, POLL_QUOTES_MS);
-    return () => clearInterval(id);
+    mountedRef.current = true;
+    const ctrl = new AbortController();
+    load(ctrl.signal);
+    const id = setInterval(() => load(), POLL_QUOTES_MS);
+    return () => {
+      mountedRef.current = false;
+      ctrl.abort();
+      clearInterval(id);
+    };
   }, [load]);
 
   const allQuotes = useMemo(() => {
@@ -304,15 +327,19 @@ export default function LiveCoverageClient() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-10 lg:py-14 space-y-6">
+      <ConnectionStatusBar status={feedStatus} lastUpdated={refreshAt || null} />
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-        <span className="chip bg-white/5 border border-white/10 text-white/80">
-          <Activity className="h-3.5 w-3.5 text-accent-success" /> Live asset-class coverage
-        </span>
+        <div className="flex flex-wrap items-center gap-3 mb-1">
+          <span className="chip bg-white/5 border border-white/10 text-white/80">
+            <Activity className="h-3.5 w-3.5 text-accent-success" /> Live asset-class coverage
+          </span>
+          <ConnectionBadge status={feedStatus} lastUpdated={refreshAt || null} />
+        </div>
         <h1 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-display tracking-tight">
           <span className="text-gradient-primary">{counts.all || '…'} live quotes</span> across every desk.
         </h1>
         <p className="mt-3 text-white/65 max-w-3xl">
-          Real-time prices for every Oakmont Digital Markets Group asset class: equities, ETFs, indices,
+          Real-time prices for every Oakmont Digital Capital Group asset class: equities, ETFs, indices,
           forex, commodities, futures, and crypto. Every row is streamed from the primary exchange feed -
           no mock data, no placeholders. Tap a row to expand a live candle chart.
         </p>
@@ -341,7 +368,10 @@ export default function LiveCoverageClient() {
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[12rem]">
           <Search className="h-4 w-4 absolute left-2 top-1/2 -translate-y-1/2 text-white/40" />
+          <label htmlFor="live-coverage-search" className="sr-only">Search live market coverage</label>
           <input
+            id="live-coverage-search"
+            type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search symbol or name"
@@ -349,7 +379,7 @@ export default function LiveCoverageClient() {
           />
         </div>
         <button
-          onClick={load}
+          onClick={() => load()}
           disabled={loading}
           className="text-xs text-white/55 hover:text-white inline-flex items-center gap-1 disabled:opacity-50"
         >
@@ -361,11 +391,21 @@ export default function LiveCoverageClient() {
         <Link href="/markets/signals" className="ml-auto text-xs text-accent-success hover:underline inline-flex items-center gap-1">
           Live market signals <ArrowRight className="h-3 w-3" />
         </Link>
+        <Link href="/markets/candles" className="text-xs text-accent-success hover:underline inline-flex items-center gap-1">
+          Candle visualisation <ArrowRight className="h-3 w-3" />
+        </Link>
       </div>
 
       {loading && !filtered.length ? (
         <div className="glass-light p-6 text-center text-sm text-white/55 inline-flex items-center gap-2 justify-center">
           <Loader2 className="h-4 w-4 animate-spin" /> Connecting to live market feeds…
+        </div>
+      ) : feedStatus === CONNECTION_STATUS.DISCONNECTED && !filtered.length ? (
+        <div className="glass-light p-6 text-center text-sm text-accent-error bg-accent-error/10 border border-accent-error/30 space-y-3">
+          <p>Live market data is temporarily unavailable. Check your connection and retry.</p>
+          <button type="button" onClick={() => load()} className="btn-ghost text-xs mx-auto">
+            <RefreshCw className="h-3 w-3" /> Retry feeds
+          </button>
         </div>
       ) : !filtered.length ? (
         <div className="glass-light p-6 text-center text-sm text-white/55">No live symbols match this filter.</div>

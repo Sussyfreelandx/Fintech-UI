@@ -6,14 +6,14 @@ import MarketSignalsClient from './MarketSignalsClient';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Visible live market signals | Oakmont Digital Markets Group',
+  title: 'Visible live market signals | Oakmont Digital Capital Group',
   description:
-    'Visible live market signals from Oakmont Digital Markets Group, computed in real time from streaming candles across crypto, equities, ETFs, indices, forex, commodities and futures.',
+    'Visible live market signals from Oakmont Digital Capital Group, computed in real time from streaming candles across crypto, equities, ETFs, indices, forex, commodities and futures.',
 };
 
 export default function MarketSignalsPage() {
   return (
-    <main className="pb-24 lg:pb-0 relative min-h-screen bg-gradient-to-br from-indigo-950/40 via-slate-950/60 to-emerald-950/30">
+    <main className="pb-24 lg:pb-0 relative min-h-screen bg-gradient-to-br from-slate-950/60 via-graphite-900/50 to-charcoal-950/40">
       <Navbar />
       <MarketSignalsClient />
       <Footer />

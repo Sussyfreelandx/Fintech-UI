@@ -39,7 +39,7 @@ const ABOUT = {
 function aboutFor(sym) {
   return (
     ABOUT[sym] ||
-    `${sym} is one of the assets supported on Oakmont Digital Markets Group spot. Live mid-market quotes are streamed from Binance and rounded to the asset's tick size on every fill.`
+    `${sym} is one of the assets supported on Oakmont Digital Capital Group spot. Live mid-market quotes are streamed from Binance and rounded to the asset's tick size on every fill.`
   );
 }
 
@@ -103,7 +103,7 @@ export default function AssetDetailClient({ symbol }) {
   );
 
   return (
-    <div className="min-h-screen bg-ink-950 text-white">
+    <div className="min-h-screen bg-graphite-950 text-white">
       <TopBar />
       <div className="flex">
         <Sidebar />
